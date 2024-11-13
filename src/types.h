@@ -1,24 +1,21 @@
 #pragma once
 #include <stdbool.h>
 
-enum ECmdType_s {
+typedef enum {
     NO_CMD,
     SEARCH,
     SYNC,
     UPGRADE,
     UPDATE_PKG_LIST,
     CLEAR_CACHE,
-};
-typedef enum ECmdType_s CmdType;
+} CmdType;
 
-struct Cmd_s {
+typedef struct {
     CmdType cmdType;
     char* cmdStr;
-};
-typedef struct Cmd_s Cmd;
+} Cmd;
 
-struct Opts_s {
+typedef struct {
     char *pkg_name;
     char *makepkg_opts;
-};
-typedef struct Opts_s Opts;
+} Opts;
