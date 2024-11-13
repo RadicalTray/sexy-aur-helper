@@ -1,0 +1,25 @@
+- check for command mistakes
+    - excess args
+
+search <str>
+    - search through packages.txt file
+    - return all of the matched pkgs
+    - TODO(later?): prettify and add description for each matched pkg
+
+makepkg <pkg> [-o|--opts <str>]
+    - handle pkg not found
+    - pull the AUR repo
+    - run makepkg [opts: defaults to '-si']
+        - if there is aur dependencies, also sync the dependencies
+        with '--asdeps'
+
+upgrade
+    - 'pacman -Syu' and then update all aur packages
+    - TODO(?): upgrade individual AUR packages
+
+update-pkg-list
+    - fetch and update the packages.txt
+
+clear-cache
+    - only clear old versions
+    - clear all versions
