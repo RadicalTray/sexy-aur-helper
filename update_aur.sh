@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# Exit on errors and stuff, idk read the manual
 set -Eeuo pipefail
 
 if [ -z "$XDG_CACHE_HOME" ]; then
