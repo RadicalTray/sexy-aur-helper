@@ -22,6 +22,22 @@ void print_help() {
     printf("HELP\n");
 }
 
-int run(CmdType cmdType, Opts opts) {
+int run_search(const int len, const char **args) {
+    return 0;
+}
+
+int run_sync(const int len, const char **args) {
+    return 0;
+}
+
+int run_upgrade(const int len, const char **args) {
+    return 0;
+}
+
+int run_update_pkg_list(const int len, const char **args) {
+    return 0;
+}
+
+int run_clear_cache(const int len, const char **args) {
     return 0;
 }

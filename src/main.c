@@ -4,7 +4,7 @@
 #include "types.h"
 #include "functions.h"
 
-int main(int argc, char **argv) {
+int main(const int argc, const char **argv) {
     if (argc == 1) {
         print_help();
         return 1;
@@ -24,7 +24,21 @@ int main(int argc, char **argv) {
     }
 
     const int cmd_args_len = argc - 2;
-    char **cmd_args = argv + 2;
-    const Opts opts = process_args(cmd_args_len, cmd_args);
-    return run(cmdType, opts);
+    const char **cmd_args = argv + 2;
+
+    switch (cmdType) {
+        case SEARCH:
+            return run_search(cmd_args_len, cmd_args);
+        case SYNC:
+            return run_sync(cmd_args_len, cmd_args);
+        case UPGRADE:
+            return run_upgrade(cmd_args_len, cmd_args);
+        case UPDATE_PKG_LIST:
+            return run_update_pkg_list(cmd_args_len, cmd_args);
+        case CLEAR_CACHE:
+            return run_clear_cache(cmd_args_len, cmd_args);
+        default:
+            printf("WTF\n");
+            return 69;
+    }
 }
