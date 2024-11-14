@@ -5,9 +5,18 @@
 #include "functions.h"
 
 int main(const int argc, const char **argv) {
-    if (argc == 1) {
-        print_help();
+    if (set_globals() != 0) {
         return 1;
+    }
+
+    if (argc <= 1) {
+        print_help(stderr);
+        return 1;
+    }
+
+    if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+        print_help(stdout);
+        return 0;
     }
 
     CmdType cmdType = NO_CMD;
@@ -18,8 +27,8 @@ int main(const int argc, const char **argv) {
         }
     }
     if (cmdType == NO_CMD) {
-        printf("%s is unexpected!\n", argv[1]);
-        print_help();
+        fprintf(stderr, "%s is unexpected!\n", argv[1]);
+        print_help(stderr);
         return 1;
     }
 
@@ -38,7 +47,8 @@ int main(const int argc, const char **argv) {
         case CLEAR_CACHE:
             return run_clear_cache(cmd_args_len, cmd_args);
         default:
-            printf("WTF\n");
-            return 69;
+            break;
     }
+    fprintf(stderr, "%s: This is not supposed to happen.\n", __func__);
+    return 69;
 }

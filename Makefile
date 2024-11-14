@@ -1,4 +1,4 @@
-TARGET_EXEC := sexy-aur-helper
+TARGET_EXEC := saur
 
 BUILD_DIR := build
 SRC_DIRS := src

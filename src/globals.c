@@ -14,3 +14,5 @@ const Opts g_default_opts = {
     .pkg_name = "",
     .makepkg_opts = "-si",
 };
+
+const char *g_cache_dir;
