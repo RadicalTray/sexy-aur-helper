@@ -9,4 +9,5 @@
 extern const Cmd g_cmds[g_cmds_len];
 
 extern const Opts g_default_opts;
-extern const char *g_cache_dir;
+extern char *g_cache_dir;
+extern char *g_pkg_list_filepath;

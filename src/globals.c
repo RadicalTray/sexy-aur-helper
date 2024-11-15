@@ -15,4 +15,5 @@ const Opts g_default_opts = {
     .makepkg_opts = "-si",
 };
 
-const char *g_cache_dir;
+char *g_cache_dir;
+char *g_pkg_list_filepath;

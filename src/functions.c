@@ -22,7 +22,7 @@ void print_help(FILE *fptr) {
 // another way is to return indices of pkgs in pkg_list, but pkg_list is not an array
 // something would have to change, idk if that's also better
 //
-// TODO: impl fuzzy search
+// TODO(when i rewrite this in rust i guess (i give up)): impl fuzzy search
 //
 // pkg_list isn't a c string.
 void search_pkg(const int search_strslen,
@@ -75,21 +75,21 @@ int run_search(const int len, const char **args) {
         return 1;
     }
 
-    if (access(PATH(PKG_LIST_FILENAME), F_OK) != 0) {
+    if (access(g_pkg_list_filepath, F_OK) != 0) {
         if (run_update_pkg_list(0, NULL) != 0) {
             fprintf(stderr, "Couldn't fetch the package list!\n");
             return 1;
         }
     }
 
-    FILE *p_file = fopen(PATH(PKG_LIST_FILENAME), "r");
+    FILE *p_file = fopen(g_pkg_list_filepath, "r");
     if (p_file == NULL) {
         fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
         return 1;
     }
 
     struct stat pkg_list_filestat;
-    stat(PATH(PKG_LIST_FILENAME), &pkg_list_filestat);
+    stat(g_pkg_list_filepath, &pkg_list_filestat);
 
     const int filesize = pkg_list_filestat.st_size;
     char pkg_list[filesize];
@@ -130,7 +130,7 @@ int run_update_pkg_list(const int len, const char **args) {
     }
 
     char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
-    sh_cmd = str_concat(sh_cmd, PATH(PKG_LIST_FILENAME));
+    sh_cmd = str_concat(sh_cmd, g_pkg_list_filepath);
 
     if (exec_sh_cmd(sh_cmd) != 0) {
         fprintf(stderr, "An error happended while trying to fetch the package list!\n");
@@ -151,5 +151,12 @@ int set_globals() {
         return 1;
     }
     g_cache_dir = str_concat(cache_home, "/" PROGRAM_NAME);
+    g_pkg_list_filepath = str_concat(cache_home, "/" PKG_LIST_FILENAME);
     return 0;
+}
+
+// this is definitely overkill lol
+void cleanup() {
+    free(g_cache_dir);
+    free(g_pkg_list_filepath);
 }

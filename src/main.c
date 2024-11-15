@@ -42,20 +42,29 @@ int main(const int argc, const char **argv) {
     const int cmd_args_len = argc - 2;
     const char **cmd_args = argv + 2;
 
+    int ret;
     switch (cmdType) {
         case SEARCH:
-            return run_search(cmd_args_len, cmd_args);
+            ret = run_search(cmd_args_len, cmd_args);
+            break;
         case SYNC:
-            return run_sync(cmd_args_len, cmd_args);
+            ret = run_sync(cmd_args_len, cmd_args);
+            break;
         case UPGRADE:
-            return run_upgrade(cmd_args_len, cmd_args);
+            ret = run_upgrade(cmd_args_len, cmd_args);
+            break;
         case UPDATE_PKG_LIST:
-            return run_update_pkg_list(cmd_args_len, cmd_args);
+            ret = run_update_pkg_list(cmd_args_len, cmd_args);
+            break;
         case CLEAR_CACHE:
-            return run_clear_cache(cmd_args_len, cmd_args);
+            ret = run_clear_cache(cmd_args_len, cmd_args);
+            break;
         default:
+            fprintf(stderr, "%s: This is impossible.\n", __func__);
+            ret = 69;
             break;
     }
-    fprintf(stderr, "%s: This is not supposed to happen.\n", __func__);
-    return 69;
+
+    cleanup();
+    return ret;
 }
