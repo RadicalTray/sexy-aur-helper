@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 
+#define PKG_LIST_FILENAME "packages.txt"
 #define XDG_CACHE_HOME "XDG_CACHE_HOME"
 #define PROGRAM_NAME "saur"
 
