@@ -34,14 +34,14 @@ void search_pkg(const int search_strslen,
     int matched_pkgs_count = 0;
     // fuck it im hardcoding it, i'm not making a dynamic array
     const int matched_pkgs_max_count = 50;
-    char *matched_pkgs[matched_pkgs_max_count];
+    char **matched_pkgs = malloc(matched_pkgs_max_count * sizeof(char*));
     for (int i = 0; i < pkg_list_size && matched_pkgs_count < matched_pkgs_max_count; i++) {
         int pkg_strlen = 0;
         while (pkg_list[i + pkg_strlen] != '\n') {
             pkg_strlen++;
         }
 
-        char pkg_name[pkg_strlen + 1]; // +1 for NUL
+        char *pkg_name = malloc(pkg_strlen + 1); // +1 for NUL
         for (int j = 0; j < pkg_strlen; j++) {
             pkg_name[j] = pkg_list[i + j];
         }
@@ -49,12 +49,20 @@ void search_pkg(const int search_strslen,
 
         i += pkg_strlen; // don't forget to move i to '\n'
 
+        bool isMatch = false;
         for (int j = 0; j < search_strslen && matched_pkgs_count < matched_pkgs_max_count; j++) {
             if (strstr(pkg_name, search_strs[j]) != NULL) {
                 matched_pkgs[matched_pkgs_count] = pkg_name;
                 matched_pkgs_count++;
+                isMatch = true;
+                break;
             }
         }
+        if (isMatch) {
+            continue;
+        }
+
+        free(pkg_name);
     }
 
     *dst_matched_pkgs_count = matched_pkgs_count;
@@ -94,8 +102,10 @@ int run_search(const int len, const char **args) {
 
     printf("matched_pkgs_count: %i\n", matched_pkgs_count);
     for (int i = 0; i < matched_pkgs_count; i++) {
-        printf("%s ", matched_pkgs[i]);
+        printf("%s\n", matched_pkgs[i]);
+        free(matched_pkgs[i]);
     }
+    free(matched_pkgs);
     return 0;
 }
 
@@ -119,13 +129,14 @@ int run_update_pkg_list(const int len, const char **args) {
         return 1;
     }
 
-    const char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
+    char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
     sh_cmd = str_concat(sh_cmd, PATH(PKG_LIST_FILENAME));
 
     if (exec_sh_cmd(sh_cmd) != 0) {
-        fprintf(stderr, "An error happended while trying to fetch the package list!");
+        fprintf(stderr, "An error happended while trying to fetch the package list!\n");
         return 1;
     }
+    free(sh_cmd);
     return 0;
 }
 
