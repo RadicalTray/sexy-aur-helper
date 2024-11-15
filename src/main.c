@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "globals.h"
 #include "types.h"
 #include "functions.h"
@@ -11,6 +12,9 @@ int main(const int argc, const char **argv) {
     }
 
     mkdir(g_cache_dir, S_IRWXU);
+    if (errno != -1 && errno != EEXIST) {
+        perror("Error");
+    }
 
     if (argc <= 1) {
         print_help(stderr);
