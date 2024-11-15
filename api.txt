@@ -6,10 +6,10 @@ search <str>
     - return all of the matched pkgs
     - TODO(later?): prettify and add description for each matched pkg
 
-makepkg <pkg> [-o|--opts <str>]
+sync <pkg> [-o|--options <str>]
     - handle pkg not found
     - pull the AUR repo
-    - run makepkg [opts: defaults to '-si']
+    - run makepkg [options: defaults to '-si']
         - if there is aur dependencies, also sync the dependencies
         with '--asdeps'
 

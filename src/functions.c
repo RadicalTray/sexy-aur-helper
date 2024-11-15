@@ -82,6 +82,7 @@ int run_search(const int len, const char **args) {
         }
     }
 
+    // dupe code
     FILE *p_file = fopen(g_pkg_list_filepath, "r");
     if (p_file == NULL) {
         fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
@@ -109,7 +110,100 @@ int run_search(const int len, const char **args) {
     return 0;
 }
 
+// smartass again
+//
+// TODO: impl show multiple pkg versions (pkg, pkg-git, pkg-*)
+bool check_pkg(const int sync_pkg_name_len,
+              const char *sync_pkg_name,
+              const int pkg_list_size,
+              const char *pkg_list) {
+    for (int i = 0; i < pkg_list_size; i++) {
+        int pkg_name_len = 0;
+        int matched_char_count = 0;
+        while (pkg_list[i + pkg_name_len] != '\n') {
+            matched_char_count += pkg_name_len < sync_pkg_name_len &&
+                sync_pkg_name[pkg_name_len] == pkg_list[i + pkg_name_len];
+            pkg_name_len++;
+        }
+
+        // NOTE: the multiple versions case will have
+        //          matched_char_count == pkg_name_len?
+        // TODO: maybe impl that later
+        if (sync_pkg_name_len == pkg_name_len &&
+            matched_char_count == sync_pkg_name_len) {
+            return true;
+        }
+
+        i += pkg_name_len; // don't forget to move i to '\n'
+    }
+    return false;
+}
+
+void run_makepkg(const int sync_pkg_count, const char **sync_pkg_list) {
+}
+
+// TODO: --options='str'
 int run_sync(const int len, const char **args) {
+    const char *makepkg_opts = "-si";
+    int sync_pkg_count = 0;
+    bool indices[len] = {}; // hopefully initialized to false
+    for (int i = 0; i < len; i++) {
+        if (strcmp(args[i], "-o") == 0 ||
+            strcmp(args[i], "--options") == 0) {
+            i++;
+            if (i == len) {
+                fprintf(stderr, "Specify options for '%s'\n", args[i]);
+                return 1;
+            }
+            makepkg_opts = args[i];
+            continue;
+        }
+
+        sync_pkg_count++;
+        indices[i] = true;
+    }
+
+    if (sync_pkg_count == 0) {
+        fprintf(stderr, "Specify packages to sync.\n");
+        return 1;
+    }
+
+    const char *sync_pkg_list[sync_pkg_count];
+    int x = 0;
+    for (int i = 0; i < len; i++) {
+        if (indices[i] == true) {
+            sync_pkg_list[x] = args[i];
+            x++;
+        }
+    }
+
+    // dupe code
+    FILE *p_file = fopen(g_pkg_list_filepath, "r");
+    if (p_file == NULL) {
+        fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
+        return 1;
+    }
+
+    struct stat pkg_list_filestat;
+    stat(g_pkg_list_filepath, &pkg_list_filestat);
+
+    const int filesize = pkg_list_filestat.st_size;
+    char pkg_list[filesize];
+    fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
+    fclose(p_file);
+
+    bool error = false;
+    for (int i = 0; i < sync_pkg_count; i++) {
+        if(check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i], filesize, pkg_list) == false) {
+            fprintf(stderr, "'%s' not found.\n", sync_pkg_list[i]);
+            error = true;
+        }
+    }
+    if (error) {
+        return 1;
+    }
+
+    run_makepkg(sync_pkg_count, sync_pkg_list);
     return 0;
 }
 
@@ -124,7 +218,7 @@ int run_upgrade(const int len, const char **args) {
 }
 
 int run_update_pkg_list(const int len, const char **args) {
-    if (len != 0) {
+    if (len != 0 || args == NULL) {
         print_help(stderr);
         return 1;
     }
@@ -141,6 +235,11 @@ int run_update_pkg_list(const int len, const char **args) {
 }
 
 int run_clear_cache(const int len, const char **args) {
+    if (len != 0 || args == NULL) {
+        print_help(stderr);
+        return 1;
+    }
+
     return 0;
 }
 
