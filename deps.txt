@@ -1,1 +1,4 @@
 Arch Linux
+    - base (gzip)
+    - base-devel (makepkg, git)
+    - curl

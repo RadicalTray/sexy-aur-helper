@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "globals.h"
 #include "types.h"
 #include "functions.h"
@@ -8,6 +9,8 @@ int main(const int argc, const char **argv) {
     if (set_globals() != 0) {
         return 1;
     }
+
+    mkdir(g_cache_dir, S_IRWXU);
 
     if (argc <= 1) {
         print_help(stderr);
