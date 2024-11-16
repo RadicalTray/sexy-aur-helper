@@ -227,6 +227,7 @@ int run_update_pkg_list(const int len, const char **args) {
     sh_cmd = str_concat(sh_cmd, g_pkg_list_filepath);
 
     if (exec_sh_cmd(sh_cmd) != 0) {
+        free(sh_cmd);
         fprintf(stderr, "An error happended while trying to fetch the package list!\n");
         return 1;
     }
