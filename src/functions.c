@@ -223,15 +223,19 @@ int run_update_pkg_list(const int len, const char **args) {
         return 1;
     }
 
-    char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
-    sh_cmd = str_concat(sh_cmd, g_pkg_list_filepath);
+    // smartass
+    const char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
+    const int sh_cmd_len = strlen(sh_cmd);
+    const int filepath_len = strlen(g_pkg_list_filepath);
+    const int cmd_len = sh_cmd_len + filepath_len;
+    char cmd[cmd_len + 1]; // This should allocate it on the stack right?
+    memcpy(cmd, sh_cmd, sh_cmd_len);
+    memcpy(cmd + sh_cmd_len, g_pkg_list_filepath, filepath_len + 1);
 
-    if (exec_sh_cmd(sh_cmd) != 0) {
-        free(sh_cmd);
+    if (exec_sh_cmd(cmd) != 0) {
         fprintf(stderr, "An error happended while trying to fetch the package list!\n");
         return 1;
     }
-    free(sh_cmd);
     return 0;
 }
 
