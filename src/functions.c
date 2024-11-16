@@ -255,7 +255,7 @@ int set_globals() {
         return 1;
     }
     g_cache_dir = str_concat(cache_home, "/" PROGRAM_NAME);
-    g_pkg_list_filepath = str_concat(cache_home, "/" PKG_LIST_FILENAME);
+    g_pkg_list_filepath = str_concat(g_cache_dir, "/" PKG_LIST_FILENAME);
     return 0;
 }
 
