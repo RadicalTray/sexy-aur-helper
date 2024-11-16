@@ -219,11 +219,11 @@ int run_upgrade(const int len, const char **args) {
 
 int run_update_pkg_list(const int len, const char **args) {
     if (len != 0) {
-        fprintf(stderr, "Arguments unexpected: '");
-        for (int i = 0; i < len; i++) {
-            fprintf(stderr, "%s", args[i]);
+        fprintf(stderr, "Arguments unexpected: ");
+        for (int i = 0; i < len - 1; i++) {
+            fprintf(stderr, "'%s' ", args[i]);
         }
-        fprintf(stderr, "'\n");
+        fprintf(stderr, "'%s'\n", args[len - 1]);
         print_help(stderr);
         return 1;
     }
@@ -246,11 +246,11 @@ int run_update_pkg_list(const int len, const char **args) {
 
 int run_clear_cache(const int len, const char **args) {
     if (len != 0) {
-        fprintf(stderr, "Arguments unexpected: '");
-        for (int i = 0; i < len; i++) {
-            fprintf(stderr, "%s", args[i]);
+        fprintf(stderr, "Arguments unexpected: ");
+        for (int i = 0; i < len - 1; i++) {
+            fprintf(stderr, "'%s' ", args[i]);
         }
-        fprintf(stderr, "'\n");
+        fprintf(stderr, "'%s'\n", args[len - 1]);
         print_help(stderr);
         return 1;
     }
