@@ -139,7 +139,7 @@ bool check_pkg(const int sync_pkg_name_len,
     return false;
 }
 
-void run_makepkg(const int sync_pkg_count, const char **sync_pkg_list) {
+void run_makepkg(const char *makepkg_opts, const int sync_pkg_count, const char **sync_pkg_list) {
 }
 
 // TODO: --options='str'
@@ -150,11 +150,11 @@ int run_sync(const int len, const char **args) {
     for (int i = 0; i < len; i++) {
         if (strcmp(args[i], "-o") == 0 ||
             strcmp(args[i], "--options") == 0) {
-            i++;
-            if (i == len) {
-                fprintf(stderr, "Specify options for '%s'\n", args[i]);
+            if (i + 1 == len) {
+                fprintf(stderr, "Specify options for makepkg.\n");
                 return 1;
             }
+            i++;
             makepkg_opts = args[i];
             continue;
         }
@@ -203,7 +203,7 @@ int run_sync(const int len, const char **args) {
         return 1;
     }
 
-    run_makepkg(sync_pkg_count, sync_pkg_list);
+    run_makepkg(makepkg_opts, sync_pkg_count, sync_pkg_list);
     return 0;
 }
 
