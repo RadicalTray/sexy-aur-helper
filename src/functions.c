@@ -148,15 +148,17 @@ void run_makepkg(const int clone_dir_path_len,
                  const char **sync_pkg_list) {
     // should have just used paths with '/' suffix bruh
     const int ext_clone_dir_path_len = clone_dir_path_len + 1; // + 1 for '/'
-    char *ext_clone_dir_path[ext_clone_dir_path_len + 1];
+    char ext_clone_dir_path[ext_clone_dir_path_len + 1];
 
     memcpy(ext_clone_dir_path, clone_dir_path, clone_dir_path_len);
-    ext_clone_dir_path[ext_clone_dir_path_len - 1] = "/";
-    ext_clone_dir_path[ext_clone_dir_path_len] = "\0";
+    ext_clone_dir_path[ext_clone_dir_path_len - 1] = '/';
+    ext_clone_dir_path[ext_clone_dir_path_len] = '\0';
 
     for (int i = 0; i < sync_pkg_count; i++) {
         const char *pkg_dir = sync_pkg_list[i];
         const int pkg_dir_len = strlen(pkg_dir);
+
+        printf("Syncing %s\n", pkg_dir);
 
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_dir_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
