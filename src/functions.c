@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include "functions.h"
 #include "types.h"
 #include "globals.h"
@@ -139,7 +140,31 @@ bool check_pkg(const int sync_pkg_name_len,
     return false;
 }
 
-void run_makepkg(const char *makepkg_opts, const int sync_pkg_count, const char **sync_pkg_list) {
+// TODO: don't use system() for running makepkg
+void run_makepkg(const int clone_dir_path_len,
+                 const char *clone_dir_path,
+                 const char *makepkg_opts,
+                 const int sync_pkg_count,
+                 const char **sync_pkg_list) {
+    // should have just used paths with '/' suffix bruh
+    const int ext_clone_dir_path_len = clone_dir_path_len + 1; // + 1 for '/'
+    char *ext_clone_dir_path[ext_clone_dir_path_len + 1];
+
+    memcpy(ext_clone_dir_path, clone_dir_path, clone_dir_path_len);
+    ext_clone_dir_path[ext_clone_dir_path_len - 1] = "/";
+    ext_clone_dir_path[ext_clone_dir_path_len] = "\0";
+
+    for (int i = 0; i < sync_pkg_count; i++) {
+        const char *pkg_dir = sync_pkg_list[i];
+        const int pkg_dir_len = strlen(pkg_dir);
+
+        const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_dir_len;
+        char pkg_dir_path[pkg_dir_path_len + 1];
+        memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
+        memcpy(pkg_dir_path + ext_clone_dir_path_len, pkg_dir, pkg_dir_len + 1);
+
+        mkdir(pkg_dir_path, S_IRWXU);
+    }
 }
 
 // TODO: --options='str'
@@ -206,7 +231,21 @@ int run_sync(const int len, const char **args) {
         return 1;
     }
 
-    run_makepkg(makepkg_opts, sync_pkg_count, sync_pkg_list);
+    const int cache_dir_len = strlen(g_cache_dir);
+    const char *clone_dir = "/clone";
+    const int clone_dir_len = strlen(clone_dir);
+
+    const int clone_dir_path_len = cache_dir_len + clone_dir_len;
+    char clone_dir_path[clone_dir_path_len + 1];
+    memcpy(clone_dir_path, g_cache_dir, cache_dir_len);
+    memcpy(clone_dir_path + cache_dir_len, clone_dir, clone_dir_len + 1);
+
+    mkdir(clone_dir_path, S_IRWXU);
+    if (errno != -1 && errno != EEXIST) {
+        perror("Error");
+    }
+
+    run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
     return 0;
 }
 
