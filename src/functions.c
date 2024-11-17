@@ -9,6 +9,9 @@
 #include "globals.h"
 #include "helper.h"
 
+// TODO(fast): use chdir and refactor
+
+// TODO: accept cd path, NULL = don't cd
 int exec_sh_cmd(const char *cmd) {
     printf("Executing '%s'\n", cmd);
     return system(cmd);
@@ -209,6 +212,29 @@ int run_makepkg(const int clone_dir_path_len,
                 fprintf(stderr, "%s already exists, but is not a directory!", pkg_dir_path);
                 return 1;
             }
+        }
+
+        if (!git_pulled) {
+            const char *pull_sh_cmds[3] = {
+                "cd '",
+                pkg_dir_path,
+                "'; git pull",
+            };
+            int pull_sh_cmd_lens[3], pull_cmd_len = 0;
+            for (int i = 0; i < 3; i++) {
+                pull_sh_cmd_lens[i] = strlen(pull_sh_cmds[i]);
+                pull_cmd_len += pull_sh_cmd_lens[i];
+            }
+
+            char pull_cmd[pull_cmd_len + 1];
+            int pull_offset = 0;
+            for (int i = 0; i < 3; i++) {
+                memcpy(pull_cmd + pull_offset, pull_sh_cmds[i], pull_sh_cmd_lens[i]);
+                pull_offset += pull_sh_cmd_lens[i];
+            }
+            pull_cmd[pull_cmd_len] = '\0';
+
+            exec_sh_cmd(pull_cmd);
         }
 
         // dupe code
