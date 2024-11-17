@@ -146,7 +146,7 @@ void run_makepkg(const char *makepkg_opts, const int sync_pkg_count, const char 
 int run_sync(const int len, const char **args) {
     const char *makepkg_opts = "-si";
     int sync_pkg_count = 0;
-    bool indices[len] = {}; // hopefully initialized to false
+    bool is_pkg[len] = {}; // hopefully initialized to false
     for (int i = 0; i < len; i++) {
         if (strcmp(args[i], "-o") == 0 ||
             strcmp(args[i], "--options") == 0) {
@@ -160,7 +160,7 @@ int run_sync(const int len, const char **args) {
         }
 
         sync_pkg_count++;
-        indices[i] = true;
+        is_pkg[i] = true;
     }
 
     if (sync_pkg_count == 0) {
@@ -169,11 +169,14 @@ int run_sync(const int len, const char **args) {
     }
 
     const char *sync_pkg_list[sync_pkg_count];
-    int x = 0;
+    int j = 0;
     for (int i = 0; i < len; i++) {
-        if (indices[i] == true) {
-            sync_pkg_list[x] = args[i];
-            x++;
+        if (is_pkg[i]) {
+            sync_pkg_list[j] = args[i];
+            j++;
+            if (j == sync_pkg_count) {
+                break;
+            }
         }
     }
 
@@ -194,7 +197,7 @@ int run_sync(const int len, const char **args) {
 
     bool error = false;
     for (int i = 0; i < sync_pkg_count; i++) {
-        if(check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i], filesize, pkg_list) == false) {
+        if (check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i], filesize, pkg_list) == false) {
             fprintf(stderr, "'%s' not found.\n", sync_pkg_list[i]);
             error = true;
         }
