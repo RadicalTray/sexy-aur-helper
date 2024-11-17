@@ -155,17 +155,41 @@ void run_makepkg(const int clone_dir_path_len,
     ext_clone_dir_path[ext_clone_dir_path_len] = '\0';
 
     for (int i = 0; i < sync_pkg_count; i++) {
-        const char *pkg_dir = sync_pkg_list[i];
-        const int pkg_dir_len = strlen(pkg_dir);
+        const char *pkg_name = sync_pkg_list[i];
 
-        printf("Syncing %s\n", pkg_dir);
+        printf("Syncing %s\n", pkg_name);
 
-        const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_dir_len;
+        // WARN: will paths, url always be valid?
+        const char *sh_cmds[6] = {
+            "cd '",
+            clone_dir_path,
+            "'; git clone ",
+            EXT_AUR_PKG_URL,
+            pkg_name,
+            ".git",
+        };
+        int sh_cmd_lens[6], cmd_len = 0;
+        for (int i = 0; i < 6; i++) {
+            sh_cmd_lens[i] = strlen(sh_cmds[i]);
+            cmd_len += sh_cmd_lens[i];
+        }
+
+        char cmd[cmd_len + 1];
+        int offset = 0;
+        for (int i = 0; i < 6; i++) {
+            memcpy(cmd + offset, sh_cmds[i], sh_cmd_lens[i]);
+            offset += sh_cmd_lens[i];
+        }
+        cmd[cmd_len] = '\0';
+
+        exec_sh_cmd(cmd);
+
+        const int pkg_name_len = sh_cmd_lens[4];
+        const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
         memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
-        memcpy(pkg_dir_path + ext_clone_dir_path_len, pkg_dir, pkg_dir_len + 1);
+        memcpy(pkg_dir_path + ext_clone_dir_path_len, pkg_name, pkg_name_len + 1);
 
-        mkdir(pkg_dir_path, S_IRWXU);
     }
 }
 
