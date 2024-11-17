@@ -140,8 +140,12 @@ bool check_pkg(const int sync_pkg_name_len,
     return false;
 }
 
-// TODO: don't use system() for running makepkg
-void run_makepkg(const int clone_dir_path_len,
+// TODO:
+//  - don't use system() for running makepkg (user can be stupid with options)
+//  - tell when something (PKGBUILD changes, etc) is changed from the aur
+//
+// NOTE: not accounting for when directory is bad (empty, deleted something in it, etc)
+int run_makepkg(const int clone_dir_path_len,
                  const char *clone_dir_path,
                  const char *makepkg_opts,
                  const int sync_pkg_count,
@@ -160,7 +164,8 @@ void run_makepkg(const int clone_dir_path_len,
         printf("Syncing %s\n", pkg_name);
 
         // WARN: will paths, url always be valid?
-        const char *sh_cmds[6] = {
+        // dupe code
+        const char *clone_sh_cmds[6] = {
             "cd '",
             clone_dir_path,
             "'; git clone ",
@@ -168,29 +173,68 @@ void run_makepkg(const int clone_dir_path_len,
             pkg_name,
             ".git",
         };
-        int sh_cmd_lens[6], cmd_len = 0;
+        int clone_sh_cmd_lens[6], clone_cmd_len = 0;
         for (int i = 0; i < 6; i++) {
-            sh_cmd_lens[i] = strlen(sh_cmds[i]);
-            cmd_len += sh_cmd_lens[i];
+            clone_sh_cmd_lens[i] = strlen(clone_sh_cmds[i]);
+            clone_cmd_len += clone_sh_cmd_lens[i];
         }
 
-        char cmd[cmd_len + 1];
-        int offset = 0;
+        char clone_cmd[clone_cmd_len + 1];
+        int clone_offset = 0;
         for (int i = 0; i < 6; i++) {
-            memcpy(cmd + offset, sh_cmds[i], sh_cmd_lens[i]);
-            offset += sh_cmd_lens[i];
+            memcpy(clone_cmd + clone_offset, clone_sh_cmds[i], clone_sh_cmd_lens[i]);
+            clone_offset += clone_sh_cmd_lens[i];
         }
-        cmd[cmd_len] = '\0';
+        clone_cmd[clone_cmd_len] = '\0';
 
-        exec_sh_cmd(cmd);
-
-        const int pkg_name_len = sh_cmd_lens[4];
+        const int pkg_name_len = clone_sh_cmd_lens[4];
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
         memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
         memcpy(pkg_dir_path + ext_clone_dir_path_len, pkg_name, pkg_name_len + 1);
 
+        struct stat s;
+        const int err = stat(pkg_dir_path, &s);
+        bool git_pulled = false;
+        if (err == -1) {
+            if(errno == ENOENT) {
+                exec_sh_cmd(clone_cmd);
+                git_pulled = true;
+            } else {
+                perror("stat");
+                return 1;
+            }
+        } else {
+            if (!S_ISDIR(s.st_mode)) {
+                fprintf(stderr, "%s already exists, but is not a directory!", pkg_dir_path);
+                return 1;
+            }
+        }
+
+        // dupe code
+        const char *makepkg_sh_cmds[4] = {
+            "cd '",
+            pkg_dir_path,
+            "'; makepkg ",
+            makepkg_opts,
+        };
+        int makepkg_sh_cmd_lens[4], makepkg_cmd_len = 0;
+        for (int i = 0; i < 4; i++) {
+            makepkg_sh_cmd_lens[i] = strlen(makepkg_sh_cmds[i]);
+            makepkg_cmd_len += makepkg_sh_cmd_lens[i];
+        }
+
+        char makepkg_cmd[makepkg_cmd_len + 1];
+        int makepkg_offset = 0;
+        for (int i = 0; i < 4; i++) {
+            memcpy(makepkg_cmd + makepkg_offset, makepkg_sh_cmds[i], makepkg_sh_cmd_lens[i]);
+            makepkg_offset += makepkg_sh_cmd_lens[i];
+        }
+        makepkg_cmd[makepkg_cmd_len] = '\0';
+
+        exec_sh_cmd(makepkg_cmd);
     }
+    return 0;
 }
 
 // TODO: --options='str'
@@ -268,11 +312,10 @@ int run_sync(const int len, const char **args) {
 
     mkdir(clone_dir_path, S_IRWXU);
     if (errno != -1 && errno != EEXIST) {
-        perror("Error");
+        perror("mkdir");
     }
 
-    run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
-    return 0;
+    return run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
 }
 
 int run_upgrade(const int len, const char **args) {

@@ -13,7 +13,7 @@ int main(const int argc, const char **argv) {
 
     mkdir(g_cache_dir, S_IRWXU);
     if (errno != -1 && errno != EEXIST) {
-        perror("Error");
+        perror("mkdir");
     }
 
     if (argc <= 1) {
