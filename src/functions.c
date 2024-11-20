@@ -32,7 +32,6 @@ pkg_list_t get_aur_pkg_list() {
     struct stat pkg_list_filestat;
     stat(g_pkg_list_filepath, &pkg_list_filestat);
 
-    printf("Hi\n");
     const int filesize = pkg_list_filestat.st_size;
     char *pkg_list = malloc(filesize);
     fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
