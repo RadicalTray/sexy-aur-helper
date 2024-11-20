@@ -98,7 +98,7 @@ int run_search(const int len, const char **args) {
 
     const int filesize = pkg_list_filestat.st_size;
     char pkg_list[filesize];
-    fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
+    fread(pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
     fclose(p_file);
 
     int matched_pkgs_count;
