@@ -34,7 +34,7 @@ pkg_list_t get_aur_pkg_list() {
 
     const int filesize = pkg_list_filestat.st_size;
     char *pkg_list = malloc(filesize);
-    fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
+    fread(pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
     fclose(p_file);
 
     return (pkg_list_t){ .size = filesize, .buf = pkg_list, };
