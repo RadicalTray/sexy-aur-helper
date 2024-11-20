@@ -21,6 +21,26 @@ void print_help(FILE *fptr) {
     fprintf(fptr, "HELP\n");
 }
 
+// returns file contents and filesize of the package.txt
+pkg_list_t get_aur_pkg_list() {
+    FILE *p_file = fopen(g_pkg_list_filepath, "r");
+    if (p_file == NULL) {
+        fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
+        return (pkg_list_t){ .size = 0, .buf = NULL };
+    }
+
+    struct stat pkg_list_filestat;
+    stat(g_pkg_list_filepath, &pkg_list_filestat);
+
+    printf("Hi\n");
+    const int filesize = pkg_list_filestat.st_size;
+    char *pkg_list = malloc(filesize);
+    fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
+    fclose(p_file);
+
+    return (pkg_list_t){ .size = filesize, .buf = pkg_list, };
+}
+
 // I might have been a smartass here.
 //
 // another way is to return indices of pkgs in pkg_list, but pkg_list is not an array
@@ -86,24 +106,15 @@ int run_search(const int len, const char **args) {
         }
     }
 
-    // dupe code
-    FILE *p_file = fopen(g_pkg_list_filepath, "r");
-    if (p_file == NULL) {
-        fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
+    const pkg_list_t pkg_list = get_aur_pkg_list();
+    if (pkg_list.buf == NULL) {
         return 1;
     }
 
-    struct stat pkg_list_filestat;
-    stat(g_pkg_list_filepath, &pkg_list_filestat);
-
-    const int filesize = pkg_list_filestat.st_size;
-    char pkg_list[filesize];
-    fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
-    fclose(p_file);
-
     int matched_pkgs_count;
     char **matched_pkgs;
-    search_pkg(len, args, pkg_list_filestat.st_size, pkg_list, &matched_pkgs_count, &matched_pkgs);
+    search_pkg(len, args, pkg_list.size, pkg_list.buf, &matched_pkgs_count, &matched_pkgs);
+    free(pkg_list.buf);
 
     printf("matched_pkgs_count: %i\n", matched_pkgs_count);
     for (int i = 0; i < matched_pkgs_count; i++) {
@@ -118,9 +129,9 @@ int run_search(const int len, const char **args) {
 //
 // TODO: impl show multiple pkg versions (pkg, pkg-git, pkg-*)
 bool check_pkg(const int sync_pkg_name_len,
-              const char *sync_pkg_name,
-              const int pkg_list_size,
-              const char *pkg_list) {
+               const char *sync_pkg_name,
+               const int pkg_list_size,
+               const char *pkg_list) {
     for (int i = 0; i < pkg_list_size; i++) {
         int pkg_name_len = 0;
         int matched_char_count = 0;
@@ -149,10 +160,10 @@ bool check_pkg(const int sync_pkg_name_len,
 //
 // NOTE: not accounting for when directory is bad (empty, deleted something in it, etc)
 int run_makepkg(const int clone_dir_path_len,
-                 const char *clone_dir_path,
-                 const char *makepkg_opts,
-                 const int sync_pkg_count,
-                 const char **sync_pkg_list) {
+                const char *clone_dir_path,
+                const char *makepkg_opts,
+                const int sync_pkg_count,
+                const char **sync_pkg_list) {
     // should have just used paths with '/' suffix bruh
     const int ext_clone_dir_path_len = clone_dir_path_len + 1; // + 1 for '/'
     char ext_clone_dir_path[ext_clone_dir_path_len + 1];
@@ -301,28 +312,19 @@ int run_sync(const int len, const char **args) {
         }
     }
 
-    // dupe code
-    FILE *p_file = fopen(g_pkg_list_filepath, "r");
-    if (p_file == NULL) {
-        fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
+    const pkg_list_t pkg_list = get_aur_pkg_list();
+    if (pkg_list.buf == NULL) {
         return 1;
     }
 
-    struct stat pkg_list_filestat;
-    stat(g_pkg_list_filepath, &pkg_list_filestat);
-
-    const int filesize = pkg_list_filestat.st_size;
-    char pkg_list[filesize];
-    fread(&pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
-    fclose(p_file);
-
     bool error = false;
     for (int i = 0; i < sync_pkg_count; i++) {
-        if (check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i], filesize, pkg_list) == false) {
+        if (check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i], pkg_list.size, pkg_list.buf) == false) {
             fprintf(stderr, "'%s' not found.\n", sync_pkg_list[i]);
             error = true;
         }
     }
+    free(pkg_list.buf);
     if (error) {
         return 1;
     }

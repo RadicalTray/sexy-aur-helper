@@ -19,3 +19,8 @@ typedef struct {
     char *pkg_name;
     char *makepkg_opts;
 } Opts;
+
+typedef struct pkg_list_s {
+    int size;
+    char *buf;
+} pkg_list_t;
