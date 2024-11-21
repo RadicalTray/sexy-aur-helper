@@ -9,12 +9,16 @@ dyn_arr dyn_arr_init(const int cap, const int size, const void *data) {
     if (data == NULL || size <= 0) {
         if (cap < 0) {
             arr.cap = 1;
+            arr.buf = malloc(arr.cap);
+        } else if (cap == 0) {
+            arr.cap = 0;
+            arr.buf = NULL;
         } else {
             arr.cap = cap;
+            arr.buf = malloc(arr.cap);
         }
 
         arr.size = 0;
-        arr.buf = malloc(arr.cap);
         return arr;
     }
 
@@ -61,6 +65,9 @@ void dyn_arr_append(dyn_arr *arr, const int size, const void *data) {
 
 void dyn_arr_free(dyn_arr *arr) {
     free(arr->buf);
+    arr->cap = 0;
+    arr->size = 0;
+    arr->buf = NULL;
 }
 
 void dyn_arr_resize(dyn_arr *arr, const int size);

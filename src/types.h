@@ -35,3 +35,4 @@ dyn_arr dyn_arr_init(const int cap, const int size, const void *data);
 void dyn_arr_append(dyn_arr *arr, const int size, const void *data);
 void dyn_arr_resize(dyn_arr *arr, const int size);
 void dyn_arr_reserve(dyn_arr *arr, const int size);
+void dyn_arr_free(dyn_arr *arr);

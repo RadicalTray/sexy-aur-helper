@@ -345,6 +345,9 @@ int run_sync(const int len, const char **args) {
     return run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
 }
 
+void upgrade_pkg() {
+}
+
 int run_upgrade(const int len, const char **args) {
     if (len != 0) {
         printf("Individual pkg upgrade is not implemented.\n");
@@ -356,7 +359,25 @@ int run_upgrade(const int len, const char **args) {
     // TODO: use libalpm
 
     FILE *p_aur_pkg_count = popen("/usr/bin/pacman -Qmq | wc -l", "r");
-    // read
+    if (p_aur_pkg_count == NULL) {
+        perror("popen(\"/usr/bin/pacman -Qmq | wc -l\", \"r\")");
+        return 1;
+    }
+
+    char buf[256];
+    int line_count = 0;
+    int aur_pkg_count = 0;
+    while (fgets(buf, sizeof buf, p_aur_pkg_count) != 0) {
+        aur_pkg_count = atoi(buf);
+        line_count++;
+    }
+    if (line_count > 1) {
+        fprintf(stderr, "SOMETHING'S FISHY\n");
+        return 1;
+    }
+    pclose(p_aur_pkg_count);
+
+    printf("Found %i packages\n", aur_pkg_count);
 
     FILE *p_pacman = popen("/usr/bin/pacman -Qmq", "r");
     if (p_pacman == NULL) {
@@ -364,17 +385,59 @@ int run_upgrade(const int len, const char **args) {
         return 1;
     }
 
-    // char buf[256];
-    // while (fgets(buf, sizeof buf, p_pacman) != 0) {
-    //         result += buf;
-    // }
-    // const int filesize = pkg_list_filestat.st_size;
-    // char *pkg_list = malloc(filesize);
-    // fread(pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
+    char *local_pkgs[aur_pkg_count];
+    int local_pkgs_idx = 0;
+    int name_len;
+    bool overflow = false;
+    dyn_arr a = dyn_arr_init(0, 0, NULL);
+    // hasn't handled the case where buf doesn't have newline
+    while (fgets(buf, sizeof buf, p_pacman) != 0) {
+        if (!overflow) {
+            name_len = 0;
+        }
+
+        int buf_idx = 0;
+        while (buf[buf_idx] != '\n') {
+            buf_idx++;
+        }
+        name_len += buf_idx;
+        if (buf_idx == sizeof buf && buf[buf_idx - 1] != '\n') {
+            overflow = true;
+            char *buf_cpy = malloc(sizeof buf);
+            memcpy(buf_cpy, buf, sizeof buf);
+            dyn_arr_append(&a, 1, &buf_cpy);
+            continue;
+        }
+        overflow = false;
+
+        char *pkg = malloc(name_len + 1);
+        if (a.size == 0) {
+            memcpy(pkg, buf, name_len);
+        } else {
+            // hopefully will never have this case
+            int pkg_idx = 0;
+            for (int i = 0; i < a.size; i++) {
+                memcpy(pkg + pkg_idx, ((char**)a.buf)[i], sizeof buf);
+                free(((char**)a.buf)[i]);
+                pkg_idx += sizeof buf;
+            }
+            dyn_arr_free(&a);
+            memcpy(pkg + pkg_idx, buf, buf_idx);
+        }
+        pkg[name_len] = '\0';
+
+        local_pkgs[local_pkgs_idx] = pkg;
+        local_pkgs_idx++;
+    }
     pclose(p_pacman);
 
-    free(pkg_list.buf);
+    for (int i = 0; i < aur_pkg_count; i++) {
+        printf("%s\n", local_pkgs[i]);
+        upgrade_pkg(local_pkgs[i]);
+        free(local_pkgs[i]);
+    }
 
+    free(pkg_list.buf);
     return 0;
 }
 
