@@ -353,17 +353,21 @@ int run_upgrade(const int len, const char **args) {
     }
 
     pkg_list_t pkg_list = get_aur_pkg_list();
-    // TODO: use libalpm bruh wtf
+    // TODO: use libalpm
+
+    FILE *p_aur_pkg_count = popen("/usr/bin/pacman -Qmq | wc -l", "r");
+    // read
+
     FILE *p_pacman = popen("/usr/bin/pacman -Qmq", "r");
     if (p_pacman == NULL) {
         perror("popen(\"/usr/bin/pacman -Qmq\", \"r\")");
         return 1;
     }
 
-    char buf[256];
-    while (fgets(buf, sizeof buf, p_pacman) != 0) {
-            result += buf;
-    }
+    // char buf[256];
+    // while (fgets(buf, sizeof buf, p_pacman) != 0) {
+    //         result += buf;
+    // }
     // const int filesize = pkg_list_filestat.st_size;
     // char *pkg_list = malloc(filesize);
     // fread(pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
