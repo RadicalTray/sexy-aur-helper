@@ -6,7 +6,36 @@
 #include "types.h"
 #include "functions.h"
 
+#include <alpm.h>
+
+int cmp_find_aur(const void *a, const void *b);
+
+int test(const int argc, const char **argv) {
+    alpm_errno_t err;
+    alpm_handle_t *g_alpm_handle = alpm_initialize("/", "/var/lib/pacman/", &err);
+    if (g_alpm_handle == NULL) {
+        fprintf(stderr, "alpm_initialize: %s", alpm_strerror(err));
+        return 1;
+    }
+
+    alpm_db_t *db = alpm_get_localdb(g_alpm_handle);
+    if (db == NULL) {
+        fprintf(stderr, "Couldn't get localdb!");
+        return 1;
+    }
+    // alpm_db_set_usage(db, ALPM_DB_USAGE_SEARCH);
+    alpm_list_t *pkg_list = alpm_db_get_pkgcache(db);
+    if (pkg_list == NULL) {
+        fprintf(stderr, "Couldn't get package list from database!");
+        return 1;
+    }
+
+    return alpm_release(g_alpm_handle); // this also releases db
+}
+
 int main(const int argc, const char **argv) {
+    return test(argc, argv);
+
     if (set_globals() != 0) {
         return 1;
     }
