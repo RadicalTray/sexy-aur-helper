@@ -61,6 +61,13 @@ const aur_pkg_list_t* get_aur_pkg_list() {
     if (!g_search_list.init) {
         g_search_list.init = true;
 
+        if (access(g_pkg_list_filepath, F_OK) != 0) {
+            if (run_update_pkg_list(0, NULL) != 0) {
+                fprintf(stderr, "Couldn't fetch the package list!\n");
+                return NULL;
+            }
+        }
+
         FILE *p_file = fopen(g_pkg_list_filepath, "r");
         if (p_file == NULL) {
             fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
@@ -88,16 +95,9 @@ int run_search(const int len, const char **args) {
         return 1;
     }
 
-    if (access(g_pkg_list_filepath, F_OK) != 0) {
-        if (run_update_pkg_list(0, NULL) != 0) {
-            fprintf(stderr, "Couldn't fetch the package list!\n");
-            return 1;
-        }
-    }
-
     const aur_pkg_list_t *pkg_list = get_aur_pkg_list();
     if (pkg_list == NULL) {
-        fprintf(stderr, "get_aur_pkg_list() failed");
+        fprintf(stderr, "get_aur_pkg_list() failed\n");
         return 1;
     }
 
@@ -161,6 +161,8 @@ int run_makepkg(const int clone_dir_path_len,
     memcpy(ext_clone_dir_path, clone_dir_path, clone_dir_path_len);
     ext_clone_dir_path[ext_clone_dir_path_len - 1] = '/';
     ext_clone_dir_path[ext_clone_dir_path_len] = '\0';
+
+    char *initial_cwd = getcwd(NULL, 0);
 
     for (int i = 0; i < sync_pkg_count; i++) {
         const char *pkg_name = sync_pkg_list[i];
@@ -261,6 +263,9 @@ int run_makepkg(const int clone_dir_path_len,
 
         exec_sh_cmd(makepkg_cmd);
     }
+
+    chdir(initial_cwd);
+    free(initial_cwd);
     return 0;
 }
 
@@ -346,7 +351,9 @@ int upgrade_pkgs(int upgrade_pkg_count, const char **upgrade_pkg_list) {
     return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, "-si --needed"); // TODO: change makepkg_opts
 }
 
-// TODO: parse args
+// TODO:
+//  - parse args
+//  - impl aur dep install if needed
 int run_upgrade(const int len, const char **args) {
     if (len != 0) {
         printf("Individual pkg upgrade is not implemented.\n");
