@@ -108,10 +108,15 @@ int run_search(const int len, const char **args) {
 // smartass again
 //
 // TODO: impl show multiple pkg versions (pkg, pkg-git, pkg-*)
-bool check_pkg(const int sync_pkg_name_len,
-               const char *sync_pkg_name,
-               const int pkg_list_size,
-               const char *pkg_list) {
+int check_pkg(const int sync_pkg_name_len, const char *sync_pkg_name) {
+    const pkg_list_t search_list = get_aur_search_list();
+    if (search_list.buf == NULL) {
+        fprintf(stderr, "get_aur_search_list() failed");
+        return 69;
+    }
+    const int pkg_list_size = search_list.size;
+    const char *pkg_list = search_list.buf;
+
     for (int i = 0; i < pkg_list_size; i++) {
         int pkg_name_len = 0;
         int matched_char_count = 0;
@@ -126,12 +131,15 @@ bool check_pkg(const int sync_pkg_name_len,
         // TODO: maybe impl that later
         if (sync_pkg_name_len == pkg_name_len &&
             matched_char_count == sync_pkg_name_len) {
-            return true;
+            free(search_list.buf);
+            return 0;
         }
 
         i += pkg_name_len; // don't forget to move i to '\n'
     }
-    return false;
+
+    free(search_list.buf);
+    return 1;
 }
 
 // TODO:
@@ -292,19 +300,21 @@ int run_sync(const int len, const char **args) {
         }
     }
 
-    const pkg_list_t pkg_list = get_aur_search_list();
-    if (pkg_list.buf == NULL) {
-        return 1;
-    }
-
     bool error = false;
     for (int i = 0; i < sync_pkg_count; i++) {
-        if (check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i], pkg_list.size, pkg_list.buf) == false) {
-            fprintf(stderr, "'%s' not found.\n", sync_pkg_list[i]);
-            error = true;
+        int ret = check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
+        // could've used if else but nvm
+        switch (ret) {
+            case 1: {
+                fprintf(stdout, "'%s' not found in aur package list.\n", sync_pkg_list[i]);
+                error = true;
+                break;
+            } case 69: {
+                error = true;
+                break;
+            }
         }
     }
-    free(pkg_list.buf);
     if (error) {
         return 1;
     }
