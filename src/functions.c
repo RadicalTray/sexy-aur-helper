@@ -4,25 +4,58 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <alpm.h>
 #include "functions.h"
 #include "types.h"
+#include "search.h"
+#include "utils.h"
 #include "globals.h"
 #include "helper.h"
 
 // TODO(fast): use chdir and refactor
 
-// TODO: accept cd path, NULL = don't cd
-int exec_sh_cmd(const char *cmd) {
-    printf("Executing '%s'\n", cmd);
-    return system(cmd);
+// should only be called once in a program
+int init_alpm() {
+    if (g_alpm_handle != NULL || g_alpm_localdb != NULL) {
+        fprintf(stderr, "init_alpm() is called more than once");
+        return 69;
+    }
+
+    alpm_errno_t err;
+    g_alpm_handle = alpm_initialize("/", "/var/lib/pacman/", &err);
+    if (g_alpm_handle == NULL) {
+        fprintf(stderr, "alpm_initialize: %s", alpm_strerror(err));
+        return 1;
+    }
+
+    g_alpm_localdb = alpm_get_localdb(g_alpm_handle);
+    if (g_alpm_localdb == NULL) {
+        fprintf(stderr, "Couldn't get localdb!");
+        return 1;
+    }
+    return 0;
 }
 
-void print_help(FILE *fptr) {
-    fprintf(fptr, "HELP\n");
+// I think this list or at least the data is freed along with db and alpm
+//
+// this function is called only once in a program i think.
+// so no need to make a g_pkg_list
+const alpm_list_t* get_pkg_list() {
+    if (init_alpm() != 0) {
+        return NULL;
+    }
+
+    alpm_list_t *pkg_list = alpm_db_get_pkgcache(g_alpm_localdb);
+    if (pkg_list == NULL) {
+        fprintf(stderr, "Couldn't get package list from database!");
+        return NULL;
+    }
+
+    return pkg_list;
 }
 
 // returns file contents and filesize of the package.txt
-pkg_list_t get_aur_pkg_list() {
+pkg_list_t get_aur_search_list() {
     FILE *p_file = fopen(g_pkg_list_filepath, "r");
     if (p_file == NULL) {
         fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
@@ -40,58 +73,6 @@ pkg_list_t get_aur_pkg_list() {
     return (pkg_list_t){ .size = filesize, .buf = pkg_list, };
 }
 
-// I might have been a smartass here.
-//
-// another way is to return indices of pkgs in pkg_list, but pkg_list is not an array
-// something would have to change, idk if that's also better
-//
-// TODO(when i rewrite this in rust i guess (i give up)): impl fuzzy search
-//
-// pkg_list isn't a c string.
-void search_pkg(const int search_strslen,
-                const char **search_strs,
-                const int pkg_list_size,
-                const char *pkg_list,
-                int *dst_matched_pkgs_count,
-                char ***dst_matched_pkgs) {
-    int matched_pkgs_count = 0;
-    // fuck it im hardcoding it, i'm not making a dynamic array
-    const int matched_pkgs_max_count = 50;
-    char **matched_pkgs = malloc(matched_pkgs_max_count * sizeof(char*));
-    for (int i = 0; i < pkg_list_size && matched_pkgs_count < matched_pkgs_max_count; i++) {
-        int pkg_strlen = 0;
-        while (pkg_list[i + pkg_strlen] != '\n') {
-            pkg_strlen++;
-        }
-
-        char *pkg_name = malloc(pkg_strlen + 1); // +1 for NUL
-        for (int j = 0; j < pkg_strlen; j++) {
-            pkg_name[j] = pkg_list[i + j];
-        }
-        pkg_name[pkg_strlen] = '\0';
-
-        i += pkg_strlen; // don't forget to move i to '\n'
-
-        bool isMatch = false;
-        for (int j = 0; j < search_strslen && matched_pkgs_count < matched_pkgs_max_count; j++) {
-            if (strstr(pkg_name, search_strs[j]) != NULL) {
-                matched_pkgs[matched_pkgs_count] = pkg_name;
-                matched_pkgs_count++;
-                isMatch = true;
-                break;
-            }
-        }
-        if (isMatch) {
-            continue;
-        }
-
-        free(pkg_name);
-    }
-
-    *dst_matched_pkgs_count = matched_pkgs_count;
-    *dst_matched_pkgs = matched_pkgs;
-}
-
 int run_search(const int len, const char **args) {
     if (len == 0) {
         print_help(stderr);
@@ -105,7 +86,7 @@ int run_search(const int len, const char **args) {
         }
     }
 
-    const pkg_list_t pkg_list = get_aur_pkg_list();
+    const pkg_list_t pkg_list = get_aur_search_list();
     if (pkg_list.buf == NULL) {
         return 1;
     }
@@ -311,7 +292,7 @@ int run_sync(const int len, const char **args) {
         }
     }
 
-    const pkg_list_t pkg_list = get_aur_pkg_list();
+    const pkg_list_t pkg_list = get_aur_search_list();
     if (pkg_list.buf == NULL) {
         return 1;
     }
@@ -345,7 +326,7 @@ int run_sync(const int len, const char **args) {
     return run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
 }
 
-void upgrade_pkg() {
+void upgrade_pkg(alpm_pkg_t *pkg) {
 }
 
 int run_upgrade(const int len, const char **args) {
@@ -355,89 +336,17 @@ int run_upgrade(const int len, const char **args) {
         return 1;
     }
 
-    pkg_list_t pkg_list = get_aur_pkg_list();
-    // TODO: use libalpm
+    const alpm_list_t *pkg_list = get_pkg_list();
+    for (const alpm_list_t *p = pkg_list; p != NULL; p = alpm_list_next(p)) {
+        alpm_pkg_t *pkg = p->data;
+        const char *packager = alpm_pkg_get_packager(pkg);
 
-    FILE *p_aur_pkg_count = popen("/usr/bin/pacman -Qmq | wc -l", "r");
-    if (p_aur_pkg_count == NULL) {
-        perror("popen(\"/usr/bin/pacman -Qmq | wc -l\", \"r\")");
-        return 1;
-    }
-
-    char buf[256];
-    int line_count = 0;
-    int aur_pkg_count = 0;
-    while (fgets(buf, sizeof buf, p_aur_pkg_count) != 0) {
-        aur_pkg_count = atoi(buf);
-        line_count++;
-    }
-    if (line_count > 1) {
-        fprintf(stderr, "SOMETHING'S FISHY\n");
-        return 1;
-    }
-    pclose(p_aur_pkg_count);
-
-    printf("Found %i packages\n", aur_pkg_count);
-
-    FILE *p_pacman = popen("/usr/bin/pacman -Qmq", "r");
-    if (p_pacman == NULL) {
-        perror("popen(\"/usr/bin/pacman -Qmq\", \"r\")");
-        return 1;
-    }
-
-    char *local_pkgs[aur_pkg_count];
-    int local_pkgs_idx = 0;
-    int name_len;
-    bool overflow = false;
-    dyn_arr a = dyn_arr_init(0, 0, NULL);
-    // hasn't handled the case where buf doesn't have newline
-    while (fgets(buf, sizeof buf, p_pacman) != 0) {
-        if (!overflow) {
-            name_len = 0;
+        // WARN: Assuming unknown packager = AUR
+        if (strcmp(packager, "Unknown Packager") == 0) {
+            printf("hi\n");
+            upgrade_pkg(pkg);
         }
-
-        int buf_idx = 0;
-        while (buf[buf_idx] != '\n') {
-            buf_idx++;
-        }
-        name_len += buf_idx;
-        if (buf_idx == sizeof buf && buf[buf_idx - 1] != '\n') {
-            overflow = true;
-            char *buf_cpy = malloc(sizeof buf);
-            memcpy(buf_cpy, buf, sizeof buf);
-            dyn_arr_append(&a, 1, &buf_cpy);
-            continue;
-        }
-        overflow = false;
-
-        char *pkg = malloc(name_len + 1);
-        if (a.size == 0) {
-            memcpy(pkg, buf, name_len);
-        } else {
-            // hopefully will never have this case
-            int pkg_idx = 0;
-            for (int i = 0; i < a.size; i++) {
-                memcpy(pkg + pkg_idx, ((char**)a.buf)[i], sizeof buf);
-                free(((char**)a.buf)[i]);
-                pkg_idx += sizeof buf;
-            }
-            dyn_arr_free(&a);
-            memcpy(pkg + pkg_idx, buf, buf_idx);
-        }
-        pkg[name_len] = '\0';
-
-        local_pkgs[local_pkgs_idx] = pkg;
-        local_pkgs_idx++;
     }
-    pclose(p_pacman);
-
-    for (int i = 0; i < aur_pkg_count; i++) {
-        printf("%s\n", local_pkgs[i]);
-        upgrade_pkg(local_pkgs[i]);
-        free(local_pkgs[i]);
-    }
-
-    free(pkg_list.buf);
     return 0;
 }
 
@@ -495,6 +404,7 @@ int set_globals() {
 
 // this is definitely overkill lol
 void cleanup() {
+    alpm_release(g_alpm_handle);
     free(g_cache_dir);
     free(g_pkg_list_filepath);
 }
