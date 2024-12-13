@@ -45,32 +45,39 @@ const alpm_list_t* get_pkg_list() {
         return NULL;
     }
 
-    alpm_list_t *pkg_list = alpm_db_get_pkgcache(g_alpm_localdb);
-    if (pkg_list == NULL) {
+    alpm_list_t *alpm_pkg_list = alpm_db_get_pkgcache(g_alpm_localdb);
+    if (alpm_pkg_list == NULL) {
         fprintf(stderr, "Couldn't get package list from database!");
         return NULL;
     }
 
-    return pkg_list;
+    return alpm_pkg_list;
 }
 
 // returns file contents and filesize of the package.txt
-pkg_list_t get_aur_search_list() {
-    FILE *p_file = fopen(g_pkg_list_filepath, "r");
-    if (p_file == NULL) {
-        fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
-        return (pkg_list_t){ .size = 0, .buf = NULL };
+const aur_pkg_list_t get_aur_pkg_list() {
+    if (!g_search_list.init) {
+        g_search_list.init = true;
+
+        FILE *p_file = fopen(g_pkg_list_filepath, "r");
+        if (p_file == NULL) {
+            fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
+            return g_search_list;
+        }
+
+        struct stat pkg_list_filestat;
+        stat(g_pkg_list_filepath, &pkg_list_filestat);
+
+        const int filesize = pkg_list_filestat.st_size;
+        char *pkg_list_buf = malloc(filesize);
+        fread(pkg_list_buf, filesize, 1, p_file); // last char of pkg_list_buf should be char '\n' or int = 10
+        fclose(p_file);
+
+        g_search_list.size = filesize;
+        g_search_list.buf = pkg_list_buf;
     }
 
-    struct stat pkg_list_filestat;
-    stat(g_pkg_list_filepath, &pkg_list_filestat);
-
-    const int filesize = pkg_list_filestat.st_size;
-    char *pkg_list = malloc(filesize);
-    fread(pkg_list, filesize, 1, p_file); // last char of pkg_list should be char '\n' or int = 10
-    fclose(p_file);
-
-    return (pkg_list_t){ .size = filesize, .buf = pkg_list, };
+    return g_search_list;
 }
 
 int run_search(const int len, const char **args) {
@@ -86,15 +93,15 @@ int run_search(const int len, const char **args) {
         }
     }
 
-    const pkg_list_t pkg_list = get_aur_search_list();
+    const aur_pkg_list_t pkg_list = get_aur_pkg_list();
     if (pkg_list.buf == NULL) {
+        fprintf(stderr, "get_aur_pkg_list() failed");
         return 1;
     }
 
     int matched_pkgs_count;
     char **matched_pkgs;
     search_pkg(len, args, pkg_list.size, pkg_list.buf, &matched_pkgs_count, &matched_pkgs);
-    free(pkg_list.buf);
 
     printf("matched_pkgs_count: %i\n", matched_pkgs_count);
     for (int i = 0; i < matched_pkgs_count; i++) {
@@ -109,20 +116,20 @@ int run_search(const int len, const char **args) {
 //
 // TODO: impl show multiple pkg versions (pkg, pkg-git, pkg-*)
 int check_pkg(const int sync_pkg_name_len, const char *sync_pkg_name) {
-    const pkg_list_t search_list = get_aur_search_list();
-    if (search_list.buf == NULL) {
-        fprintf(stderr, "get_aur_search_list() failed");
+    const aur_pkg_list_t pkg_list = get_aur_pkg_list();
+    if (pkg_list.buf == NULL) {
+        fprintf(stderr, "get_aur_pkg_list() failed");
         return 69;
     }
-    const int pkg_list_size = search_list.size;
-    const char *pkg_list = search_list.buf;
+    const int pkg_list_size = pkg_list.size;
+    const char *pkg_list_buf = pkg_list.buf;
 
     for (int i = 0; i < pkg_list_size; i++) {
         int pkg_name_len = 0;
         int matched_char_count = 0;
-        while (pkg_list[i + pkg_name_len] != '\n') {
+        while (pkg_list_buf[i + pkg_name_len] != '\n') {
             matched_char_count += pkg_name_len < sync_pkg_name_len &&
-                sync_pkg_name[pkg_name_len] == pkg_list[i + pkg_name_len];
+                sync_pkg_name[pkg_name_len] == pkg_list_buf[i + pkg_name_len];
             pkg_name_len++;
         }
 
@@ -131,14 +138,12 @@ int check_pkg(const int sync_pkg_name_len, const char *sync_pkg_name) {
         // TODO: maybe impl that later
         if (sync_pkg_name_len == pkg_name_len &&
             matched_char_count == sync_pkg_name_len) {
-            free(search_list.buf);
             return 0;
         }
 
         i += pkg_name_len; // don't forget to move i to '\n'
     }
 
-    free(search_list.buf);
     return 1;
 }
 
@@ -346,8 +351,8 @@ int run_upgrade(const int len, const char **args) {
         return 1;
     }
 
-    const alpm_list_t *pkg_list = get_pkg_list();
-    for (const alpm_list_t *p = pkg_list; p != NULL; p = alpm_list_next(p)) {
+    const alpm_list_t *alpm_pkg_list = get_pkg_list();
+    for (const alpm_list_t *p = alpm_pkg_list; p != NULL; p = alpm_list_next(p)) {
         alpm_pkg_t *pkg = p->data;
         const char *packager = alpm_pkg_get_packager(pkg);
 
@@ -414,6 +419,7 @@ int set_globals() {
 
 // this is definitely overkill lol
 void cleanup() {
+    free(g_search_list.buf);
     alpm_release(g_alpm_handle);
     free(g_cache_dir);
     free(g_pkg_list_filepath);

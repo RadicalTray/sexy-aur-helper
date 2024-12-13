@@ -20,10 +20,11 @@ typedef struct {
     char *makepkg_opts;
 } Opts;
 
-typedef struct pkg_list_s {
+typedef struct _aur_pkg_list_t {
+    bool init;
     int size;
     char *buf;
-} pkg_list_t;
+} aur_pkg_list_t;
 
 typedef struct dyn_ahh_arr {
     int cap;

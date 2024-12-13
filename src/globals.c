@@ -18,5 +18,6 @@ const Opts g_default_opts = {
 
 char *g_cache_dir = NULL;
 char *g_pkg_list_filepath = NULL;
+aur_pkg_list_t g_search_list = { .init = false, .size = 0, .buf = NULL };
 alpm_handle_t *g_alpm_handle = NULL;
 alpm_db_t *g_alpm_localdb = NULL;
