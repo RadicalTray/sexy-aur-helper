@@ -115,9 +115,7 @@ int run_search(const int len, const char **args) {
 }
 
 // smartass again
-//
-// TODO: impl show multiple pkg versions (pkg, pkg-git, pkg-*)
-int check_pkg(const int sync_pkg_name_len, const char *sync_pkg_name) {
+int pkg_is_in_aur(const int sync_pkg_name_len, const char *sync_pkg_name) {
     const aur_pkg_list_t *pkg_list = get_aur_pkg_list();
     if (pkg_list == NULL) {
         fprintf(stderr, "get_aur_pkg_list() failed");
@@ -135,9 +133,6 @@ int check_pkg(const int sync_pkg_name_len, const char *sync_pkg_name) {
             pkg_name_len++;
         }
 
-        // NOTE: the multiple versions case will have
-        //          matched_char_count == pkg_name_len?
-        // TODO: maybe impl that later
         if (sync_pkg_name_len == pkg_name_len &&
             matched_char_count == sync_pkg_name_len) {
             return 0;
@@ -272,7 +267,7 @@ int run_makepkg(const int clone_dir_path_len,
 int sync_pkg(int sync_pkg_count, const char **sync_pkg_list, const char *makepkg_opts) {
     bool error = false;
     for (int i = 0; i < sync_pkg_count; i++) {
-        int ret = check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
+        int ret = pkg_is_in_aur(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
         // could've used if else but nvm
         switch (ret) {
             case 1: {
@@ -351,6 +346,7 @@ int upgrade_pkgs(int upgrade_pkg_count, const char **upgrade_pkg_list) {
     return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, "-si --needed"); // TODO: change makepkg_opts
 }
 
+// TODO: parse args
 int run_upgrade(const int len, const char **args) {
     if (len != 0) {
         printf("Individual pkg upgrade is not implemented.\n");
@@ -365,11 +361,23 @@ int run_upgrade(const int len, const char **args) {
         const char *packager = alpm_pkg_get_packager(pkg);
 
         // WARN: Assuming unknown packager = AUR
-        if (strcmp(packager, "Unknown Packager") == 0) {
+        if (strcmp(packager, "Unknown Packager") == 0 &&
+            alpm_pkg_get_reason(pkg) == ALPM_PKG_REASON_EXPLICIT) {
             // pretty sure i can modify it through dyn_arr
             const char *name = alpm_pkg_get_name(pkg);
-            printf("%p\n", name);
-            dyn_arr_append(&pkg_names, sizeof (char*), &name);
+            int result = pkg_is_in_aur(strlen(name), name);
+            switch (result) {
+                case 0: {
+                    dyn_arr_append(&pkg_names, sizeof (char*), &name);
+                    break;
+                }
+                case 1: {
+                    fprintf(stdout, "'%s' not found in aur package list.\n", name);
+                    break;
+                } case 69: {
+                    return 69;
+                }
+            }
         }
     }
 
