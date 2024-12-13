@@ -55,14 +55,16 @@ const alpm_list_t* get_pkg_list() {
 }
 
 // returns file contents and filesize of the package.txt
-const aur_pkg_list_t get_aur_pkg_list() {
+//
+// don't modify aur_pkg_list_t
+const aur_pkg_list_t* get_aur_pkg_list() {
     if (!g_search_list.init) {
         g_search_list.init = true;
 
         FILE *p_file = fopen(g_pkg_list_filepath, "r");
         if (p_file == NULL) {
             fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
-            return g_search_list;
+            return NULL;
         }
 
         struct stat pkg_list_filestat;
@@ -77,7 +79,7 @@ const aur_pkg_list_t get_aur_pkg_list() {
         g_search_list.buf = pkg_list_buf;
     }
 
-    return g_search_list;
+    return &g_search_list;
 }
 
 int run_search(const int len, const char **args) {
@@ -93,15 +95,15 @@ int run_search(const int len, const char **args) {
         }
     }
 
-    const aur_pkg_list_t pkg_list = get_aur_pkg_list();
-    if (pkg_list.buf == NULL) {
+    const aur_pkg_list_t *pkg_list = get_aur_pkg_list();
+    if (pkg_list == NULL) {
         fprintf(stderr, "get_aur_pkg_list() failed");
         return 1;
     }
 
     int matched_pkgs_count;
     char **matched_pkgs;
-    search_pkg(len, args, pkg_list.size, pkg_list.buf, &matched_pkgs_count, &matched_pkgs);
+    search_pkg(len, args, pkg_list->size, pkg_list->buf, &matched_pkgs_count, &matched_pkgs);
 
     printf("matched_pkgs_count: %i\n", matched_pkgs_count);
     for (int i = 0; i < matched_pkgs_count; i++) {
@@ -116,13 +118,13 @@ int run_search(const int len, const char **args) {
 //
 // TODO: impl show multiple pkg versions (pkg, pkg-git, pkg-*)
 int check_pkg(const int sync_pkg_name_len, const char *sync_pkg_name) {
-    const aur_pkg_list_t pkg_list = get_aur_pkg_list();
-    if (pkg_list.buf == NULL) {
+    const aur_pkg_list_t *pkg_list = get_aur_pkg_list();
+    if (pkg_list == NULL) {
         fprintf(stderr, "get_aur_pkg_list() failed");
         return 69;
     }
-    const int pkg_list_size = pkg_list.size;
-    const char *pkg_list_buf = pkg_list.buf;
+    const int pkg_list_size = pkg_list->size;
+    const char *pkg_list_buf = pkg_list->buf;
 
     for (int i = 0; i < pkg_list_size; i++) {
         int pkg_name_len = 0;
@@ -267,7 +269,44 @@ int run_makepkg(const int clone_dir_path_len,
     return 0;
 }
 
-// TODO: --options='str'
+int sync_pkg(int sync_pkg_count, const char **sync_pkg_list, const char *makepkg_opts) {
+    bool error = false;
+    for (int i = 0; i < sync_pkg_count; i++) {
+        int ret = check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
+        // could've used if else but nvm
+        switch (ret) {
+            case 1: {
+                fprintf(stdout, "'%s' not found in aur package list.\n", sync_pkg_list[i]);
+                error = true;
+                break;
+            } case 69: {
+                error = true;
+                break;
+            }
+        }
+    }
+    if (error) {
+        return 1;
+    }
+
+    const int cache_dir_len = strlen(g_cache_dir);
+    const char *clone_dir = "/clone";
+    const int clone_dir_len = strlen(clone_dir);
+
+    const int clone_dir_path_len = cache_dir_len + clone_dir_len;
+    char clone_dir_path[clone_dir_path_len + 1];
+    memcpy(clone_dir_path, g_cache_dir, cache_dir_len);
+    memcpy(clone_dir_path + cache_dir_len, clone_dir, clone_dir_len + 1);
+
+    mkdir(clone_dir_path, S_IRWXU);
+    if (errno != -1 && errno != EEXIST) {
+        perror("mkdir");
+    }
+
+    return run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
+}
+
+// TODO: --options='<str>'
 int run_sync(const int len, const char **args) {
     const char *makepkg_opts = "-si";
     int sync_pkg_count = 0;
@@ -304,41 +343,7 @@ int run_sync(const int len, const char **args) {
             }
         }
     }
-
-    bool error = false;
-    for (int i = 0; i < sync_pkg_count; i++) {
-        int ret = check_pkg(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
-        // could've used if else but nvm
-        switch (ret) {
-            case 1: {
-                fprintf(stdout, "'%s' not found in aur package list.\n", sync_pkg_list[i]);
-                error = true;
-                break;
-            } case 69: {
-                error = true;
-                break;
-            }
-        }
-    }
-    if (error) {
-        return 1;
-    }
-
-    const int cache_dir_len = strlen(g_cache_dir);
-    const char *clone_dir = "/clone";
-    const int clone_dir_len = strlen(clone_dir);
-
-    const int clone_dir_path_len = cache_dir_len + clone_dir_len;
-    char clone_dir_path[clone_dir_path_len + 1];
-    memcpy(clone_dir_path, g_cache_dir, cache_dir_len);
-    memcpy(clone_dir_path + cache_dir_len, clone_dir, clone_dir_len + 1);
-
-    mkdir(clone_dir_path, S_IRWXU);
-    if (errno != -1 && errno != EEXIST) {
-        perror("mkdir");
-    }
-
-    return run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
+    return sync_pkg(sync_pkg_count, sync_pkg_list, makepkg_opts);
 }
 
 void upgrade_pkg(alpm_pkg_t *pkg) {
