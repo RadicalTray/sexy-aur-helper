@@ -346,7 +346,9 @@ int run_sync(const int len, const char **args) {
     return sync_pkg(sync_pkg_count, sync_pkg_list, makepkg_opts);
 }
 
-void upgrade_pkg(alpm_pkg_t *pkg) {
+int upgrade_pkgs(int upgrade_pkg_count, const char **upgrade_pkg_list) {
+    // TODO: check if needed to upgrade, deps etc
+    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, "-si --needed"); // TODO: change makepkg_opts
 }
 
 int run_upgrade(const int len, const char **args) {
@@ -357,17 +359,23 @@ int run_upgrade(const int len, const char **args) {
     }
 
     const alpm_list_t *alpm_pkg_list = get_pkg_list();
+    dyn_arr pkg_names = dyn_arr_init(0, 0, NULL);
     for (const alpm_list_t *p = alpm_pkg_list; p != NULL; p = alpm_list_next(p)) {
         alpm_pkg_t *pkg = p->data;
         const char *packager = alpm_pkg_get_packager(pkg);
 
         // WARN: Assuming unknown packager = AUR
         if (strcmp(packager, "Unknown Packager") == 0) {
-            printf("hi\n");
-            upgrade_pkg(pkg);
+            // pretty sure i can modify it through dyn_arr
+            const char *name = alpm_pkg_get_name(pkg);
+            printf("%p\n", name);
+            dyn_arr_append(&pkg_names, sizeof (char*), &name);
         }
     }
-    return 0;
+
+    int ret = upgrade_pkgs(pkg_names.size / sizeof (char*), (const char**)pkg_names.buf);
+    dyn_arr_free(&pkg_names);
+    return ret;
 }
 
 int run_update_pkg_list(const int len, const char **args) {
@@ -424,7 +432,7 @@ int set_globals() {
 
 // this is definitely overkill lol
 void cleanup() {
-    free(g_search_list.buf);
+    free_aur_pkg_list(&g_search_list);
     alpm_release(g_alpm_handle);
     free(g_cache_dir);
     free(g_pkg_list_filepath);

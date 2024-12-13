@@ -80,3 +80,10 @@ void print_dyn_arr_info(const dyn_arr *arr) {
     printf("\tsize: %i\n", arr->size);
     printf("\tbuf: %p\n", arr->buf);
 }
+
+void free_aur_pkg_list(aur_pkg_list_t *li) {
+    free(li->buf);
+    li->init = false;
+    li->size = 0;
+    li->buf = NULL;
+}

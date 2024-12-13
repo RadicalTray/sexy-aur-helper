@@ -12,7 +12,7 @@ typedef enum {
 
 typedef struct {
     CmdType cmdType;
-    char* cmdStr;
+    char *cmdStr;
 } Cmd;
 
 typedef struct {
@@ -26,7 +26,7 @@ typedef struct _aur_pkg_list_t {
     char *buf;
 } aur_pkg_list_t;
 
-typedef struct dyn_ahh_arr {
+typedef struct _dyn_arr {
     int cap;
     int size;
     void *buf;
@@ -37,3 +37,4 @@ void dyn_arr_append(dyn_arr *arr, const int size, const void *data);
 void dyn_arr_resize(dyn_arr *arr, const int size);
 void dyn_arr_reserve(dyn_arr *arr, const int size);
 void dyn_arr_free(dyn_arr *arr);
+void free_aur_pkg_list(aur_pkg_list_t *li);
