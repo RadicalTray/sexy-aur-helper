@@ -19,12 +19,9 @@ static void SIGINT_HANDLER(int sig) {
 
 int main(const int argc, const char **argv) {
     if (signal(SIGINT, SIGINT_HANDLER) == SIG_ERR) {
-        do {
-            perror("SIGINT");
-            exit(EXIT_FAILURE);
-        } while (0); // WHY?
+        perror("SIGINT");
+        exit(EXIT_FAILURE);
     }
-
 
     if (set_globals() != 0) {
         return 1;
