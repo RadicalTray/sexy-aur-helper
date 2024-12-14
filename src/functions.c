@@ -1,4 +1,5 @@
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -11,6 +12,10 @@
 #include "utils.h"
 #include "globals.h"
 #include "helper.h"
+
+#define BOLD_GREEN "\033[32;1m"
+#define RC "\033[0m"
+#define RCN "\033[0m\n"
 
 // should only be called once in a program
 int init_alpm() {
@@ -154,7 +159,7 @@ int run_makepkg(const int clone_dir_path_len,
                 char *const makepkg_opts[],
                 const int sync_pkg_count,
                 const char **sync_pkg_list) {
-    // should have just used paths with '/' suffix bruh
+    // TODO: is this really needed?
     const int ext_clone_dir_path_len = clone_dir_path_len + 1; // + 1 for '/'
     char ext_clone_dir_path[ext_clone_dir_path_len + 1];
 
@@ -175,7 +180,6 @@ int run_makepkg(const int clone_dir_path_len,
 
         printf("Syncing %s\n", pkg_name);
 
-        // WARN: will paths, url always be valid?
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
         memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
@@ -196,9 +200,24 @@ int run_makepkg(const int clone_dir_path_len,
                 offset += suffix_len;
                 url[offset] = '\0';
 
-                char *const args[] = {"git", "clone", url};
+                char *const args[] = {"git", "clone", url, NULL};
                 chdir(clone_dir_path);
-                execvp("git", args);
+
+                pid_t pid;
+                if ((pid=fork()) == 0) {
+                    printf(BOLD_GREEN "Cloning..." RCN);
+                    execvp("git", args);
+                    perror("execvp");
+                    exit(1);
+                }
+                if (pid < 0) {
+                    perror("fork");
+                }
+                if (pid > 0) {
+                    int status;
+                    waitpid(pid, &status, 0);
+                }
+
                 git_pulled = true;
             } else {
                 perror("stat");
@@ -213,15 +232,48 @@ int run_makepkg(const int clone_dir_path_len,
 
         if (!git_pulled) {
             chdir(pkg_dir_path);
-            char *const args[] = {"git", "pull"};
-            execvp("git", args);
+            char *const args[] = {"git", "pull", NULL};
+            pid_t pid;
+            if ((pid=fork()) == 0) {
+                printf(BOLD_GREEN "Pulling..." RCN);
+                execvp("git", args);
+                perror("execvp");
+                exit(1);
+            }
+            if (pid < 0) {
+                perror("fork");
+            }
+            if (pid > 0) {
+                int status;
+                waitpid(pid, &status, 0);
+            }
         }
 
         chdir(pkg_dir_path);
-        char *args[makepkg_opts_len + 1];
+        char *args[1 + makepkg_opts_len + 1];
         args[0] = "makepkg";
         memcpy(args + 1, makepkg_opts, makepkg_opts_len);
-        execvp("makepkg", args);
+        args[makepkg_opts_len + 1] = NULL;
+
+        printf("%i\n", makepkg_opts_len);
+        for (int i = 0; i < makepkg_opts_len + 1; i++) {
+            printf("%s\n", args[i]);
+        }
+
+        pid_t pid;
+        if ((pid=fork()) == 0) {
+            printf(BOLD_GREEN "Running makepkg..." RCN);
+            execvp("makepkg", args);
+            perror("execvp");
+            exit(1);
+        }
+        if (pid < 0) {
+            perror("fork");
+        }
+        if (pid > 0) {
+            int status;
+            waitpid(pid, &status, 0);
+        }
     }
 
     chdir(initial_cwd);
