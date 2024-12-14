@@ -210,8 +210,7 @@ int run_makepkg(const int clone_dir_path_len,
                     perror("fork");
                 }
                 if (pid > 0) {
-                    int status;
-                    waitpid(pid, &status, 0);
+                    waitpid(pid, NULL, 0);
                 }
 
                 git_pulled = true;
@@ -241,8 +240,7 @@ int run_makepkg(const int clone_dir_path_len,
                 perror("fork");
             }
             if (pid > 0) {
-                int status;
-                waitpid(pid, &status, 0);
+                waitpid(pid, NULL, 0);
             }
         }
 
@@ -262,8 +260,7 @@ int run_makepkg(const int clone_dir_path_len,
             perror("fork");
         }
         if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
+            waitpid(pid, NULL, 0);
         }
     }
 
