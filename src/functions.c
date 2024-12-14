@@ -165,7 +165,10 @@ int run_makepkg(const int clone_dir_path_len,
     // WARN: some compiler/os/libc/idk might not have this
     char *initial_cwd = getcwd(NULL, 0);
 
-    // PERF: multiple strlen in a loop if the compiler doesn't optimize it
+    const int aur_url_len = strlen(EXT_AUR_PKG_URL);
+    const char *suffix = ".git";
+    const int suffix_len = strlen(suffix);
+
     for (int i = 0; i < sync_pkg_count; i++) {
         const char *pkg_name = sync_pkg_list[i];
         const int pkg_name_len = strlen(pkg_name);
@@ -183,10 +186,6 @@ int run_makepkg(const int clone_dir_path_len,
         bool git_pulled = false;
         if (err == -1) {
             if(errno == ENOENT) {
-                const int aur_url_len = strlen(EXT_AUR_PKG_URL);
-                const char *suffix = ".git";
-                const int suffix_len = strlen(suffix);
-
                 char url[aur_url_len + pkg_name_len + suffix_len + 1];
                 int offset = 0;
                 memcpy(url + offset, EXT_AUR_PKG_URL, aur_url_len);
