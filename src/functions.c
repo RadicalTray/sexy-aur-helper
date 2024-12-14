@@ -12,8 +12,6 @@
 #include "globals.h"
 #include "helper.h"
 
-// TODO(fast): use chdir and refactor
-
 // should only be called once in a program
 int init_alpm() {
     if (g_alpm_handle != NULL || g_alpm_localdb != NULL) {
@@ -145,13 +143,15 @@ int pkg_is_in_aur(const int sync_pkg_name_len, const char *sync_pkg_name) {
 }
 
 // TODO:
-//  - don't use system() for running makepkg (user can be stupid with options)
 //  - tell when something (PKGBUILD changes, etc) is changed from the aur
+//
+// TODO: abstract execvp
 //
 // NOTE: not accounting for when directory is bad (empty, deleted something in it, etc)
 int run_makepkg(const int clone_dir_path_len,
                 const char *clone_dir_path,
-                const char *makepkg_opts,
+                const int makepkg_opts_len,
+                char *const makepkg_opts[],
                 const int sync_pkg_count,
                 const char **sync_pkg_list) {
     // should have just used paths with '/' suffix bruh
@@ -162,38 +162,17 @@ int run_makepkg(const int clone_dir_path_len,
     ext_clone_dir_path[ext_clone_dir_path_len - 1] = '/';
     ext_clone_dir_path[ext_clone_dir_path_len] = '\0';
 
+    // WARN: some compiler/os/libc/idk might not have this
     char *initial_cwd = getcwd(NULL, 0);
 
+    // PERF: multiple strlen in a loop if the compiler doesn't optimize it
     for (int i = 0; i < sync_pkg_count; i++) {
         const char *pkg_name = sync_pkg_list[i];
+        const int pkg_name_len = strlen(pkg_name);
 
         printf("Syncing %s\n", pkg_name);
 
         // WARN: will paths, url always be valid?
-        // dupe code
-        const char *clone_sh_cmds[6] = {
-            "cd '",
-            clone_dir_path,
-            "'; git clone ",
-            EXT_AUR_PKG_URL,
-            pkg_name,
-            ".git",
-        };
-        int clone_sh_cmd_lens[6], clone_cmd_len = 0;
-        for (int i = 0; i < 6; i++) {
-            clone_sh_cmd_lens[i] = strlen(clone_sh_cmds[i]);
-            clone_cmd_len += clone_sh_cmd_lens[i];
-        }
-
-        char clone_cmd[clone_cmd_len + 1];
-        int clone_offset = 0;
-        for (int i = 0; i < 6; i++) {
-            memcpy(clone_cmd + clone_offset, clone_sh_cmds[i], clone_sh_cmd_lens[i]);
-            clone_offset += clone_sh_cmd_lens[i];
-        }
-        clone_cmd[clone_cmd_len] = '\0';
-
-        const int pkg_name_len = clone_sh_cmd_lens[4];
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
         memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
@@ -204,7 +183,23 @@ int run_makepkg(const int clone_dir_path_len,
         bool git_pulled = false;
         if (err == -1) {
             if(errno == ENOENT) {
-                exec_sh_cmd(clone_cmd);
+                const int aur_url_len = strlen(EXT_AUR_PKG_URL);
+                const char *suffix = ".git";
+                const int suffix_len = strlen(suffix);
+
+                char url[aur_url_len + pkg_name_len + suffix_len + 1];
+                int offset = 0;
+                memcpy(url + offset, EXT_AUR_PKG_URL, aur_url_len);
+                offset += aur_url_len;
+                memcpy(url + offset, pkg_name, pkg_name_len);
+                offset += pkg_name_len;
+                memcpy(url + offset, suffix, suffix_len);
+                offset += suffix_len;
+                url[offset] = '\0';
+
+                char *const args[] = {"git", "clone", url};
+                chdir(clone_dir_path);
+                execvp("git", args);
                 git_pulled = true;
             } else {
                 perror("stat");
@@ -218,50 +213,16 @@ int run_makepkg(const int clone_dir_path_len,
         }
 
         if (!git_pulled) {
-            const char *pull_sh_cmds[3] = {
-                "cd '",
-                pkg_dir_path,
-                "'; git pull",
-            };
-            int pull_sh_cmd_lens[3], pull_cmd_len = 0;
-            for (int i = 0; i < 3; i++) {
-                pull_sh_cmd_lens[i] = strlen(pull_sh_cmds[i]);
-                pull_cmd_len += pull_sh_cmd_lens[i];
-            }
-
-            char pull_cmd[pull_cmd_len + 1];
-            int pull_offset = 0;
-            for (int i = 0; i < 3; i++) {
-                memcpy(pull_cmd + pull_offset, pull_sh_cmds[i], pull_sh_cmd_lens[i]);
-                pull_offset += pull_sh_cmd_lens[i];
-            }
-            pull_cmd[pull_cmd_len] = '\0';
-
-            exec_sh_cmd(pull_cmd);
+            chdir(pkg_dir_path);
+            char *const args[] = {"git", "pull"};
+            execvp("git", args);
         }
 
-        // dupe code
-        const char *makepkg_sh_cmds[4] = {
-            "cd '",
-            pkg_dir_path,
-            "'; makepkg ",
-            makepkg_opts,
-        };
-        int makepkg_sh_cmd_lens[4], makepkg_cmd_len = 0;
-        for (int i = 0; i < 4; i++) {
-            makepkg_sh_cmd_lens[i] = strlen(makepkg_sh_cmds[i]);
-            makepkg_cmd_len += makepkg_sh_cmd_lens[i];
-        }
-
-        char makepkg_cmd[makepkg_cmd_len + 1];
-        int makepkg_offset = 0;
-        for (int i = 0; i < 4; i++) {
-            memcpy(makepkg_cmd + makepkg_offset, makepkg_sh_cmds[i], makepkg_sh_cmd_lens[i]);
-            makepkg_offset += makepkg_sh_cmd_lens[i];
-        }
-        makepkg_cmd[makepkg_cmd_len] = '\0';
-
-        exec_sh_cmd(makepkg_cmd);
+        chdir(pkg_dir_path);
+        char *args[makepkg_opts_len + 1];
+        args[0] = "makepkg";
+        memcpy(args + 1, makepkg_opts, makepkg_opts_len);
+        execvp("makepkg", args);
     }
 
     chdir(initial_cwd);
@@ -269,7 +230,7 @@ int run_makepkg(const int clone_dir_path_len,
     return 0;
 }
 
-int sync_pkg(int sync_pkg_count, const char **sync_pkg_list, const char *makepkg_opts) {
+int sync_pkg(const int sync_pkg_count, const char **sync_pkg_list, const int makepkg_opts_len, char *const makepkg_opts[]) {
     bool error = false;
     for (int i = 0; i < sync_pkg_count; i++) {
         int ret = pkg_is_in_aur(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
@@ -303,12 +264,17 @@ int sync_pkg(int sync_pkg_count, const char **sync_pkg_list, const char *makepkg
         perror("mkdir");
     }
 
-    return run_makepkg(clone_dir_path_len, clone_dir_path, makepkg_opts, sync_pkg_count, sync_pkg_list);
+    return run_makepkg(clone_dir_path_len,
+                       clone_dir_path,
+                       makepkg_opts_len,
+                       makepkg_opts,
+                       sync_pkg_count,
+                       sync_pkg_list);
 }
 
 // TODO: --options='<str>'
 int run_sync(const int len, const char **args) {
-    const char *makepkg_opts = "-si";
+    const char *makepkg_opts_str = "-si";
     int sync_pkg_count = 0;
     bool is_pkg[len] = {}; // hopefully initialized to false
     for (int i = 0; i < len; i++) {
@@ -319,7 +285,7 @@ int run_sync(const int len, const char **args) {
                 return 1;
             }
             i++;
-            makepkg_opts = args[i];
+            makepkg_opts_str = args[i];
             continue;
         }
 
@@ -343,12 +309,63 @@ int run_sync(const int len, const char **args) {
             }
         }
     }
-    return sync_pkg(sync_pkg_count, sync_pkg_list, makepkg_opts);
+
+    const int makepkg_opts_str_len = strlen(makepkg_opts_str);
+    int makepkg_opts_len = 0;
+
+    // check for number of args
+    bool after_whitespace = true;
+    for (int i = 0; i < makepkg_opts_str_len; i++) {
+        if (makepkg_opts_str[i] == ' ') {
+            after_whitespace = true;
+            continue;
+        }
+        if (after_whitespace) {
+            makepkg_opts_len++;
+            after_whitespace = false;
+        }
+    }
+
+    char *makepkg_opts[makepkg_opts_len];
+    int current_opt_idx = 0;
+    for (int i = 0; i < makepkg_opts_str_len; i++) {
+        if (current_opt_idx == makepkg_opts_len) {
+            break;
+        }
+
+        if (makepkg_opts_str[i] == ' ') {
+            continue;
+        }
+
+        int opt_strlen = 0;
+        for (int j = i; j < makepkg_opts_str_len; j++) {
+            if (makepkg_opts_str[j] == ' ') {
+                break;
+            }
+
+            opt_strlen++;
+        }
+
+        char *opt_str = malloc(opt_strlen + 1);
+        memcpy(opt_str, makepkg_opts_str + i, opt_strlen);
+        opt_str[opt_strlen] = '\0';
+
+        makepkg_opts[current_opt_idx] = opt_str;
+
+        i += opt_strlen;
+        current_opt_idx++;
+    }
+
+    int ret = sync_pkg(sync_pkg_count, sync_pkg_list, makepkg_opts_len, makepkg_opts);
+    for (int i = 0; i < makepkg_opts_len; i++) {
+        free(makepkg_opts[i]);
+    }
+    return ret;
 }
 
 int upgrade_pkgs(int upgrade_pkg_count, const char **upgrade_pkg_list) {
     // TODO: check if needed to upgrade, deps etc
-    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, "-si --needed"); // TODO: change makepkg_opts
+    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 2, (char *const[]){"-si", "--needed"});
 }
 
 // TODO:
@@ -413,6 +430,7 @@ int run_update_pkg_list(const int len, const char **args) {
     memcpy(cmd, sh_cmd, sh_cmd_len);
     memcpy(cmd + sh_cmd_len, g_pkg_list_filepath, filepath_len + 1);
 
+    // TODO: use exec()
     if (exec_sh_cmd(cmd) != 0) {
         fprintf(stderr, "An error happended while trying to fetch the package list!\n");
         return 1;
