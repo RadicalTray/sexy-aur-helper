@@ -2,6 +2,11 @@
 #include "types.h"
 #include <alpm.h>
 
+#define BOLD_GREEN "\033[32;1m"
+#define BOLD_RED "\033[31;1m"
+#define RC "\033[0m"
+#define RCN "\033[0m\n"
+
 #define PKG_LIST_FILENAME "packages.txt"
 #define XDG_CACHE_HOME "XDG_CACHE_HOME"
 #define PROGRAM_NAME "saur"

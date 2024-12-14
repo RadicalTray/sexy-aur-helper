@@ -13,10 +13,6 @@
 #include "globals.h"
 #include "helper.h"
 
-#define BOLD_GREEN "\033[32;1m"
-#define RC "\033[0m"
-#define RCN "\033[0m\n"
-
 // should only be called once in a program
 int init_alpm() {
     if (g_alpm_handle != NULL || g_alpm_localdb != NULL) {

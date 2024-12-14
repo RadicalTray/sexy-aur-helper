@@ -1,12 +1,31 @@
 #include <stdio.h>
+#include <signal.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <errno.h>
 #include "globals.h"
 #include "types.h"
 #include "functions.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+static void SIGINT_HANDLER(int sig) {
+    fprintf(stderr, BOLD_RED "Caught SIGINT! Exiting..." RCN);
+    while(wait(NULL) > 0);
+    exit(2);
+}
+#pragma GCC diagnostic pop
+
 int main(const int argc, const char **argv) {
+    if (signal(SIGINT, SIGINT_HANDLER) == SIG_ERR) {
+        do {
+            perror("SIGINT");
+            exit(EXIT_FAILURE);
+        } while (0); // WHY?
+    }
+
+
     if (set_globals() != 0) {
         return 1;
     }
