@@ -230,8 +230,9 @@ int run_makepkg(const int clone_dir_path_len,
             }
         }
 
+        chdir(pkg_dir_path);
+
         if (!git_pulled) {
-            chdir(pkg_dir_path);
             char *const args[] = {"git", "pull", NULL};
             pid_t pid;
             if ((pid=fork()) == 0) {
@@ -249,16 +250,10 @@ int run_makepkg(const int clone_dir_path_len,
             }
         }
 
-        chdir(pkg_dir_path);
         char *args[1 + makepkg_opts_len + 1];
         args[0] = "makepkg";
-        memcpy(args + 1, makepkg_opts, makepkg_opts_len);
+        memcpy(args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
         args[makepkg_opts_len + 1] = NULL;
-
-        printf("%i\n", makepkg_opts_len);
-        for (int i = 0; i < makepkg_opts_len + 1; i++) {
-            printf("%s\n", args[i]);
-        }
 
         pid_t pid;
         if ((pid=fork()) == 0) {
@@ -436,8 +431,7 @@ int run_upgrade(const int len, const char **args) {
         const char *packager = alpm_pkg_get_packager(pkg);
 
         // WARN: Assuming unknown packager = AUR
-        if (strcmp(packager, "Unknown Packager") == 0 &&
-            alpm_pkg_get_reason(pkg) == ALPM_PKG_REASON_EXPLICIT) {
+        if (strcmp(packager, "Unknown Packager") == 0) {
             // pretty sure i can modify it through dyn_arr
             const char *name = alpm_pkg_get_name(pkg);
             int result = pkg_is_in_aur(strlen(name), name);
