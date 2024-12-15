@@ -163,7 +163,6 @@ int run_makepkg(const int clone_dir_path_len,
     ext_clone_dir_path[ext_clone_dir_path_len - 1] = '/';
     ext_clone_dir_path[ext_clone_dir_path_len] = '\0';
 
-    // WARN: some compiler/os/libc/idk might not have this
     char *initial_cwd = getcwd(NULL, 0);
 
     const int aur_url_len = strlen(EXT_AUR_PKG_URL);
@@ -185,7 +184,7 @@ int run_makepkg(const int clone_dir_path_len,
         const int err = stat(pkg_dir_path, &s);
         bool git_pulled = false;
         if (err == -1) {
-            if(errno == ENOENT) {
+            if (errno == ENOENT) {
                 char url[aur_url_len + pkg_name_len + suffix_len + 1];
                 int offset = 0;
                 memcpy(url + offset, EXT_AUR_PKG_URL, aur_url_len);
@@ -311,7 +310,6 @@ int sync_pkg(const int sync_pkg_count, const char **sync_pkg_list, const int mak
                        sync_pkg_list);
 }
 
-// TODO: --options='<str>'
 int run_sync(const int len, const char **args) {
     const char *makepkg_opts_str = "-si";
     int sync_pkg_count = 0;
