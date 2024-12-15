@@ -27,8 +27,8 @@ int main(const int argc, const char **argv) {
         return 1;
     }
 
-    mkdir(g_cache_dir, S_IRWXU);
-    if (errno != -1 && errno != EEXIST) {
+    int mkdir_err = mkdir(g_cache_dir, S_IRWXU);
+    if (mkdir_err != 0 && errno != EEXIST) {
         perror("mkdir");
     }
 

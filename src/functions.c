@@ -297,8 +297,8 @@ int sync_pkg(const int sync_pkg_count, const char **sync_pkg_list, const int mak
     memcpy(clone_dir_path, g_cache_dir, cache_dir_len);
     memcpy(clone_dir_path + cache_dir_len, clone_dir, clone_dir_len + 1);
 
-    mkdir(clone_dir_path, S_IRWXU);
-    if (errno != -1 && errno != EEXIST) {
+    int mkdir_err = mkdir(clone_dir_path, S_IRWXU);
+    if (mkdir_err != 0 && errno != EEXIST) {
         perror("mkdir");
     }
 
