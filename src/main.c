@@ -1,12 +1,19 @@
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <errno.h>
+
 #include "globals.h"
 #include "types.h"
-#include "functions.h"
+#include "utils.h"
+#include "sync.h"
+#include "search.h"
+#include "upgrade.h"
+#include "cache.h"
+#include "update.h"
+
+void cleanup();
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -83,4 +90,12 @@ int main(const int argc, const char **argv) {
 
     cleanup();
     return ret;
+}
+
+// this is definitely overkill lol
+void cleanup() {
+    free_aur_pkg_list(&g_search_list);
+    alpm_release(g_alpm_handle);
+    free(g_cache_dir);
+    free(g_pkg_list_filepath);
 }
