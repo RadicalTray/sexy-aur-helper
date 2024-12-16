@@ -204,11 +204,9 @@ int run_makepkg(const int clone_dir_path_len,
                     execvp("git", args);
                     perror("execvp");
                     exit(1);
-                }
-                if (pid < 0) {
+                } else if (pid < 0) {
                     perror("fork");
-                }
-                if (pid > 0) {
+                } else {
                     waitpid(pid, NULL, 0);
                 }
 
@@ -234,11 +232,9 @@ int run_makepkg(const int clone_dir_path_len,
                 execvp("git", args);
                 perror("execvp");
                 exit(1);
-            }
-            if (pid < 0) {
+            } else if (pid < 0) {
                 perror("fork");
-            }
-            if (pid > 0) {
+            } else {
                 waitpid(pid, NULL, 0);
             }
         }
@@ -254,11 +250,9 @@ int run_makepkg(const int clone_dir_path_len,
             execvp("makepkg", args);
             perror("execvp");
             exit(1);
-        }
-        if (pid < 0) {
+        } else if (pid < 0) {
             perror("fork");
-        }
-        if (pid > 0) {
+        } else {
             waitpid(pid, NULL, 0);
         }
     }
