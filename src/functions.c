@@ -16,20 +16,20 @@
 // should only be called once in a program
 int init_alpm() {
     if (g_alpm_handle != NULL || g_alpm_localdb != NULL) {
-        fprintf(stderr, "init_alpm() is called more than once");
+        fprintf(stderr, "init_alpm() is called more than once\n");
         return 69;
     }
 
     alpm_errno_t err;
     g_alpm_handle = alpm_initialize("/", "/var/lib/pacman/", &err);
     if (g_alpm_handle == NULL) {
-        fprintf(stderr, "alpm_initialize: %s", alpm_strerror(err));
+        fprintf(stderr, "alpm_initialize: %s\n", alpm_strerror(err));
         return 1;
     }
 
     g_alpm_localdb = alpm_get_localdb(g_alpm_handle);
     if (g_alpm_localdb == NULL) {
-        fprintf(stderr, "Couldn't get localdb!");
+        fprintf(stderr, "Couldn't get localdb!\n");
         return 1;
     }
     return 0;
