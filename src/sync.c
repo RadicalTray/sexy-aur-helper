@@ -7,7 +7,10 @@
 #include <stdbool.h>
 #include <sys/wait.h>
 
-#define EXECVP(file, args, ...) do {\
+#define EXECVP(file, args, ...) \
+do {\
+_Pragma("GCC diagnostic push");\
+_Pragma("GCC diagnostic ignored \"-Wformat-zero-length\"");\
     pid_t pid;\
     if ((pid=fork()) == 0) {\
         printf(__VA_ARGS__);\
@@ -19,7 +22,9 @@
     } else {\
         waitpid(pid, NULL, 0);\
     }\
+_Pragma("GCC diagnostic pop");\
 } while (0)
+
 
 int build_and_install(const int clone_dir_path_len,
                 const char *clone_dir_path,
@@ -210,10 +215,10 @@ int build_and_install(const int clone_dir_path_len,
                 offset += suffix_len;
                 url[offset] = '\0';
 
-                char *const args[] = {"git", "clone", url, NULL};
+                char *const git_args[] = {"git", "clone", url, NULL};
                 chdir(clone_dir_path);
 
-                EXECVP("git", args, BOLD_GREEN "Cloning..." RCN);
+                EXECVP("git", git_args, BOLD_GREEN "Cloning..." RCN);
 
                 git_pulled = true;
             } else {
@@ -230,16 +235,20 @@ int build_and_install(const int clone_dir_path_len,
         chdir(pkg_dir_path);
 
         if (!git_pulled) {
-            char *const args[] = {"git", "pull", NULL};
-            EXECVP("git", args, BOLD_GREEN "Pulling..." RCN);
+            char *const git_args[] = {"git", "pull", NULL};
+            EXECVP("git", git_args, BOLD_GREEN "Pulling..." RCN);
         }
 
-        char *args[1 + makepkg_opts_len + 1];
-        args[0] = "makepkg";
-        memcpy(args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
-        args[makepkg_opts_len + 1] = NULL;
+        char *makepkg_args[1 + makepkg_opts_len + 1];
+        makepkg_args[0] = "makepkg";
+        memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
+        makepkg_args[makepkg_opts_len + 1] = NULL;
 
-        EXECVP("makepkg", args, BOLD_GREEN "Running makepkg..." RCN);
+        EXECVP("makepkg", makepkg_args, BOLD_GREEN "Running makepkg..." RCN);
+
+        char *built_pkg = "";
+        char *pacman_args[] = {"pacman", "-U", built_pkg, NULL};
+        EXECVP("sudo", pacman_args, "");
     }
 
     chdir(initial_cwd);
