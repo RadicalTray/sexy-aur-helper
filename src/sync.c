@@ -302,8 +302,7 @@ int build_and_install_pkg(const int pkg_name_len,
     // TODO: Install as dependencies or explicit
     for (int i = 0; i < built_pkgs.size / sizeof(char*); i++) {
         char *built_pkg = ((char**)built_pkgs.buf)[i];
-        char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, NULL};
-        printf(BOLD_GREEN "Running pacman -U %s..." RCN, built_pkg);
+        char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, "--needed", NULL};
         EXECVP("sudo", sudo_args);
         free(built_pkg);
     }
