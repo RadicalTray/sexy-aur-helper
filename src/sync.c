@@ -196,7 +196,7 @@ int build_and_install(const int clone_dir_path_len,
     return 0;
 }
 
-// SMARTASS: wasted time memcpying "/", and strlen EXT_AUR_PKG_URL, ".git"
+// TODO: tell user about errors occurred
 int build_and_install_pkg(const int pkg_name_len,
                           const char* pkg_name,
                           const int clone_dir_path_len,
@@ -208,7 +208,7 @@ int build_and_install_pkg(const int pkg_name_len,
     const int pkg_dir_path_len = clone_dir_path_len + 1 + pkg_name_len;
     char pkg_dir_path[pkg_dir_path_len + 1];
     memcpy(pkg_dir_path, clone_dir_path, clone_dir_path_len);
-    memcpy(pkg_dir_path + clone_dir_path_len, "/", 1);
+    pkg_dir_path[clone_dir_path_len] = '/';
     memcpy(pkg_dir_path + clone_dir_path_len + 1, pkg_name, pkg_name_len + 1);
 
     struct stat s;
@@ -250,11 +250,21 @@ int build_and_install_pkg(const int pkg_name_len,
 
     chdir(pkg_dir_path);
 
+    // WARN: Assuming system() succeeds
+    //  hasn't handled all possible errors from system()
     if (!git_pulled) {
-        char *const git_args[] = {"git", "pull", NULL};
         printf(BOLD_GREEN "Pulling..." RCN);
-        EXECVP("git", git_args);
+        int ret = system("git pull");
+        if (ret != 0) {
+            printf(BOLD_RED "An error occurred while pulling repo." RCN);
+            printf(BOLD_RED "Skipping %s" RCN, pkg_name);
+            return 0;
+        }
     }
+
+    // TODO: get deps, make deps, handle aur deps
+    // FILE *pipe = popen("source PKGBUILD; echo ${makedepends[*]} ${depends[*]}");
+    // pclose(pipe);
 
     char *makepkg_args[1 + makepkg_opts_len + 1];
     makepkg_args[0] = "makepkg";
@@ -264,10 +274,39 @@ int build_and_install_pkg(const int pkg_name_len,
     printf(BOLD_GREEN "Running makepkg..." RCN);
     EXECVP("makepkg", makepkg_args);
 
-    char *built_pkg = "";
-    char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, NULL};
-    printf(BOLD_GREEN "Running pacman -U..." RCN);
-    EXECVP("sudo", sudo_args);
+    FILE *pipe = popen("makepkg --packagelist", "r");
+    dyn_arr dyn_buf = dyn_arr_init(256, 0, NULL);
+    char buf[128];
+    while (fgets(buf, sizeof buf, pipe) != NULL) {
+        dyn_arr_append(&dyn_buf, sizeof buf, buf);
+    }
+    pclose(pipe);
 
+    dyn_arr built_pkgs = dyn_arr_init(sizeof(char*), 0, NULL);
+    for (int i = 0; i < dyn_buf.size && ((char*)dyn_buf.buf)[i] != '\0'; i++) {
+        int len = 0;
+        int j = i;
+        // shouldn't need to check for NUL since output always end in newline
+        while (((char*)dyn_buf.buf)[j] != '\n') {
+            len++;
+            j++;
+        }
+        char *pkg = malloc(len + 1);
+        memcpy(pkg, dyn_buf.buf, len);
+        pkg[len] = '\0';
+        dyn_arr_append(&built_pkgs, sizeof(char*), &pkg);
+
+        i += len;
+    }
+
+    // TODO: Install as dependencies or explicit
+    for (int i = 0; i < built_pkgs.size / sizeof(char*); i++) {
+        char *built_pkg = ((char**)built_pkgs.buf)[i];
+        char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, NULL};
+        printf(BOLD_GREEN "Running pacman -U %s..." RCN, built_pkg);
+        EXECVP("sudo", sudo_args);
+        free(built_pkg);
+    }
+    dyn_arr_free(&dyn_buf);
     return 0;
 }

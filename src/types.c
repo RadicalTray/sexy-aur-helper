@@ -63,7 +63,7 @@ void dyn_arr_append(dyn_arr *arr, const int size, const void *data) {
     arr->size = new_size;
 }
 
-void dyn_arr_free(dyn_arr *arr) {
+inline void dyn_arr_free(dyn_arr *arr) {
     free(arr->buf);
     arr->cap = 0;
     arr->size = 0;
