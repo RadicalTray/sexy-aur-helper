@@ -7,13 +7,9 @@
 #include <stdbool.h>
 #include <sys/wait.h>
 
-#define EXECVP(file, args, ...) \
-do {\
-_Pragma("GCC diagnostic push");\
-_Pragma("GCC diagnostic ignored \"-Wformat-zero-length\"");\
+#define EXECVP(file, args, ...) do {\
     pid_t pid;\
     if ((pid=fork()) == 0) {\
-        printf(__VA_ARGS__);\
         execvp(file, args);\
         perror("execvp");\
         exit(1);\
@@ -21,9 +17,7 @@ _Pragma("GCC diagnostic ignored \"-Wformat-zero-length\"");\
         perror("fork");\
     } else {\
         waitpid(pid, NULL, 0);\
-    }\
-_Pragma("GCC diagnostic pop");\
-} while (0)
+    }} while (0)
 
 
 int build_and_install(const int clone_dir_path_len,
@@ -218,7 +212,8 @@ int build_and_install(const int clone_dir_path_len,
                 char *const git_args[] = {"git", "clone", url, NULL};
                 chdir(clone_dir_path);
 
-                EXECVP("git", git_args, BOLD_GREEN "Cloning..." RCN);
+                printf(BOLD_GREEN "Cloning..." RCN);
+                EXECVP("git", git_args);
 
                 git_pulled = true;
             } else {
@@ -236,7 +231,8 @@ int build_and_install(const int clone_dir_path_len,
 
         if (!git_pulled) {
             char *const git_args[] = {"git", "pull", NULL};
-            EXECVP("git", git_args, BOLD_GREEN "Pulling..." RCN);
+            printf(BOLD_GREEN "Pulling..." RCN);
+            EXECVP("git", git_args);
         }
 
         char *makepkg_args[1 + makepkg_opts_len + 1];
@@ -244,11 +240,12 @@ int build_and_install(const int clone_dir_path_len,
         memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
         makepkg_args[makepkg_opts_len + 1] = NULL;
 
-        EXECVP("makepkg", makepkg_args, BOLD_GREEN "Running makepkg..." RCN);
+        printf(BOLD_GREEN "Running makepkg..." RCN);
+        EXECVP("makepkg", makepkg_args);
 
         char *built_pkg = "";
-        char *pacman_args[] = {"pacman", "-U", built_pkg, NULL};
-        EXECVP("sudo", pacman_args, "");
+        char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, NULL};
+        EXECVP("sudo", sudo_args);
     }
 
     chdir(initial_cwd);
