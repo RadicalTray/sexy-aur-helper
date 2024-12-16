@@ -305,7 +305,7 @@ int sync_pkg(const int sync_pkg_count, const char **sync_pkg_list, const int mak
 }
 
 int run_sync(const int len, const char **args) {
-    const char *makepkg_opts_str = "-si";
+    const char *makepkg_opts_str = "";
     int sync_pkg_count = 0;
     bool is_pkg[len] = {}; // hopefully initialized to false
     for (int i = 0; i < len; i++) {
@@ -394,9 +394,13 @@ int run_sync(const int len, const char **args) {
     return ret;
 }
 
-int upgrade_pkgs(int upgrade_pkg_count, const char **upgrade_pkg_list) {
+int upgrade_pkgs(int upgrade_pkg_count, const char *upgrade_pkg_list[]) {
     // TODO: check if needed to upgrade, deps etc
-    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 2, (char *const[]){"-si", "--needed"});
+
+    // BUG:
+    upgrade_pkg_count = 2;
+    upgrade_pkg_list = (const char*[]){ "clifm", "clifm-colors-git" };
+    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 1, (char *const[]){"--needed"});
 }
 
 // TODO:
