@@ -27,6 +27,13 @@ int build_and_install(const int clone_dir_path_len,
                 const int sync_pkg_count,
                 const char **sync_pkg_list);
 
+int build_and_install_pkg(const int pkg_name_len,
+                          const char* pkg_name,
+                          const int clone_dir_path_len,
+                          const char* clone_dir_path,
+                          const int makepkg_opts_len,
+                          char *const makepkg_opts[]);
+
 int run_sync(const int len, const char **args) {
     const char *makepkg_opts_str = "";
     int sync_pkg_count = 0;
@@ -169,86 +176,98 @@ int build_and_install(const int clone_dir_path_len,
                 char *const makepkg_opts[],
                 const int sync_pkg_count,
                 const char **sync_pkg_list) {
-    // TODO: is this really needed?
-    const int ext_clone_dir_path_len = clone_dir_path_len + 1; // + 1 for '/'
-    char ext_clone_dir_path[ext_clone_dir_path_len + 1];
-
-    memcpy(ext_clone_dir_path, clone_dir_path, clone_dir_path_len);
-    ext_clone_dir_path[ext_clone_dir_path_len - 1] = '/';
-    ext_clone_dir_path[ext_clone_dir_path_len] = '\0';
-
     char *initial_cwd = getcwd(NULL, 0);
 
-    const int aur_url_len = strlen(EXT_AUR_PKG_URL);
-    const char *suffix = ".git";
-    const int suffix_len = strlen(suffix);
-
     for (int i = 0; i < sync_pkg_count; i++) {
-        const char *pkg_name = sync_pkg_list[i];
-        const int pkg_name_len = strlen(pkg_name);
-
-        printf("Syncing %s\n", pkg_name);
-
-        const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
-        char pkg_dir_path[pkg_dir_path_len + 1];
-        memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
-        memcpy(pkg_dir_path + ext_clone_dir_path_len, pkg_name, pkg_name_len + 1);
-
-        struct stat s;
-        const int err = stat(pkg_dir_path, &s);
-        bool git_pulled = false;
-        if (err == -1) {
-            if (errno == ENOENT) {
-                char url[aur_url_len + pkg_name_len + suffix_len + 1];
-                int offset = 0;
-                memcpy(url + offset, EXT_AUR_PKG_URL, aur_url_len);
-                offset += aur_url_len;
-                memcpy(url + offset, pkg_name, pkg_name_len);
-                offset += pkg_name_len;
-                memcpy(url + offset, suffix, suffix_len);
-                offset += suffix_len;
-                url[offset] = '\0';
-
-                char *const git_args[] = {"git", "clone", url, NULL};
-                chdir(clone_dir_path);
-
-                printf(BOLD_GREEN "Cloning..." RCN);
-                EXECVP("git", git_args);
-
-                git_pulled = true;
-            } else {
-                perror("stat");
-                return 1;
-            }
-        } else {
-            if (!S_ISDIR(s.st_mode)) {
-                fprintf(stderr, "%s already exists, but is not a directory!", pkg_dir_path);
-                return 1;
-            }
+        const char* pkg_name = sync_pkg_list[i];
+        int ret = build_and_install_pkg(strlen(pkg_name),
+                              pkg_name,
+                              clone_dir_path_len,
+                              clone_dir_path,
+                              makepkg_opts_len,
+                              makepkg_opts);
+        if (ret != 0) {
+            return ret;
         }
-
-        chdir(pkg_dir_path);
-
-        if (!git_pulled) {
-            char *const git_args[] = {"git", "pull", NULL};
-            printf(BOLD_GREEN "Pulling..." RCN);
-            EXECVP("git", git_args);
-        }
-
-        char *makepkg_args[1 + makepkg_opts_len + 1];
-        makepkg_args[0] = "makepkg";
-        memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
-        makepkg_args[makepkg_opts_len + 1] = NULL;
-
-        printf(BOLD_GREEN "Running makepkg..." RCN);
-        EXECVP("makepkg", makepkg_args);
-
-        char *built_pkg = "";
-        char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, NULL};
-        EXECVP("sudo", sudo_args);
     }
 
     chdir(initial_cwd);
     free(initial_cwd);
+    return 0;
+}
+
+// SMARTASS: wasted time memcpying "/", and strlen EXT_AUR_PKG_URL, ".git"
+int build_and_install_pkg(const int pkg_name_len,
+                          const char* pkg_name,
+                          const int clone_dir_path_len,
+                          const char* clone_dir_path,
+                          const int makepkg_opts_len,
+                          char *const makepkg_opts[]) {
+    printf("Syncing %s\n", pkg_name);
+
+    const int pkg_dir_path_len = clone_dir_path_len + 1 + pkg_name_len;
+    char pkg_dir_path[pkg_dir_path_len + 1];
+    memcpy(pkg_dir_path, clone_dir_path, clone_dir_path_len);
+    memcpy(pkg_dir_path + clone_dir_path_len, "/", 1);
+    memcpy(pkg_dir_path + clone_dir_path_len + 1, pkg_name, pkg_name_len + 1);
+
+    struct stat s;
+    const int err = stat(pkg_dir_path, &s);
+    bool git_pulled = false;
+    if (err == -1) {
+        if (errno == ENOENT) {
+            const int aur_url_len = strlen(EXT_AUR_PKG_URL);
+            const char *suffix = ".git";
+            const int suffix_len = strlen(suffix);
+
+            char url[aur_url_len + pkg_name_len + suffix_len + 1];
+            int offset = 0;
+            memcpy(url + offset, EXT_AUR_PKG_URL, aur_url_len);
+            offset += aur_url_len;
+            memcpy(url + offset, pkg_name, pkg_name_len);
+            offset += pkg_name_len;
+            memcpy(url + offset, suffix, suffix_len);
+            offset += suffix_len;
+            url[offset] = '\0';
+
+            char *const git_args[] = {"git", "clone", url, NULL};
+            chdir(clone_dir_path);
+
+            printf(BOLD_GREEN "Cloning..." RCN);
+            EXECVP("git", git_args);
+
+            git_pulled = true;
+        } else {
+            perror("stat");
+            return 1;
+        }
+    } else {
+        if (!S_ISDIR(s.st_mode)) {
+            fprintf(stderr, "%s already exists, but is not a directory!", pkg_dir_path);
+            return 1;
+        }
+    }
+
+    chdir(pkg_dir_path);
+
+    if (!git_pulled) {
+        char *const git_args[] = {"git", "pull", NULL};
+        printf(BOLD_GREEN "Pulling..." RCN);
+        EXECVP("git", git_args);
+    }
+
+    char *makepkg_args[1 + makepkg_opts_len + 1];
+    makepkg_args[0] = "makepkg";
+    memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
+    makepkg_args[makepkg_opts_len + 1] = NULL;
+
+    printf(BOLD_GREEN "Running makepkg..." RCN);
+    EXECVP("makepkg", makepkg_args);
+
+    char *built_pkg = "";
+    char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, NULL};
+    printf(BOLD_GREEN "Running pacman -U..." RCN);
+    EXECVP("sudo", sudo_args);
+
     return 0;
 }
