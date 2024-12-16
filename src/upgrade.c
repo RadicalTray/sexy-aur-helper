@@ -56,5 +56,5 @@ int upgrade_pkgs(int upgrade_pkg_count, const char *upgrade_pkg_list[]) {
     // BUG:
     upgrade_pkg_count = 2;
     upgrade_pkg_list = (const char*[]){ "clifm", "clifm-colors-git" };
-    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 1, (char *const[]){"--needed"});
+    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 0, NULL);
 }

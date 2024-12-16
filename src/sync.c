@@ -257,4 +257,3 @@ int run_sync(const int len, const char **args) {
     }
     return ret;
 }
-
