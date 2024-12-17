@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef enum {
     NO_CMD,
@@ -27,14 +28,23 @@ typedef struct _aur_pkg_list_t {
 } aur_pkg_list_t;
 
 typedef struct _dyn_arr {
-    int cap;
-    int size;
-    void *buf;
+    size_t cap;
+    size_t size;
+    size_t dtype_size;
+    void *data;
 } dyn_arr;
 
-dyn_arr dyn_arr_init(const int cap, const int size, const void *data);
-void dyn_arr_append(dyn_arr *arr, const int size, const void *data);
-void dyn_arr_resize(dyn_arr *arr, const int size);
-void dyn_arr_reserve(dyn_arr *arr, const int size);
-void dyn_arr_free(dyn_arr *arr);
+dyn_arr dyn_arr_init(const size_t cap, const size_t size, const size_t dtype_size, const void *data);
+
+// NOTE: assumes data has the same type as darr
+void dyn_arr_append(dyn_arr *darr, const int size, const void *data);
+
+// not impl
+void dyn_arr_resize(dyn_arr *darr, const int size);
+
+// not impl
+void dyn_arr_reserve(dyn_arr *darr, const int size);
+
+void dyn_arr_free(dyn_arr *darr);
+
 void free_aur_pkg_list(aur_pkg_list_t *li);

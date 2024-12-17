@@ -268,40 +268,40 @@ int build_and_install_pkg(const int pkg_name_len,
 
     char *makepkg_args[1 + makepkg_opts_len + 1];
     makepkg_args[0] = "makepkg";
-    memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof(char*));
+    memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof (char*));
     makepkg_args[makepkg_opts_len + 1] = NULL;
 
     printf(BOLD_GREEN "Running makepkg..." RCN);
     EXECVP("makepkg", makepkg_args);
 
     FILE *pipe = popen("makepkg --packagelist", "r");
-    dyn_arr dyn_buf = dyn_arr_init(256, 0, NULL);
+    dyn_arr dyn_buf = dyn_arr_init(256, 0, sizeof (char), NULL);
     char buf[128];
     while (fgets(buf, sizeof buf, pipe) != NULL) {
         dyn_arr_append(&dyn_buf, sizeof buf, buf);
     }
     pclose(pipe);
 
-    dyn_arr built_pkgs = dyn_arr_init(sizeof(char*), 0, NULL);
-    for (int i = 0; i < dyn_buf.size && ((char*)dyn_buf.buf)[i] != '\0'; i++) {
+    dyn_arr built_pkgs = dyn_arr_init(1, 0, sizeof (char*), NULL);
+    for (size_t i = 0; i < dyn_buf.size && ((char*)dyn_buf.data)[i] != '\0'; i++) {
         int len = 0;
         int j = i;
         // shouldn't need to check for NUL since output always end in newline
-        while (((char*)dyn_buf.buf)[j] != '\n') {
+        while (((char*)dyn_buf.data)[j] != '\n') {
             len++;
             j++;
         }
         char *pkg = malloc(len + 1);
-        memcpy(pkg, dyn_buf.buf, len);
+        memcpy(pkg, dyn_buf.data, len);
         pkg[len] = '\0';
-        dyn_arr_append(&built_pkgs, sizeof(char*), &pkg);
+        dyn_arr_append(&built_pkgs, 1, &pkg);
 
         i += len;
     }
 
     // TODO: Install as dependencies or explicit
-    for (int i = 0; i < built_pkgs.size / sizeof(char*); i++) {
-        char *built_pkg = ((char**)built_pkgs.buf)[i];
+    for (size_t i = 0; i < built_pkgs.size / sizeof(char*); i++) {
+        char *built_pkg = ((char**)built_pkgs.data)[i];
         char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, "--needed", NULL};
         EXECVP("sudo", sudo_args);
         free(built_pkg);

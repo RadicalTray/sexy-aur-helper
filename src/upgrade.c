@@ -20,19 +20,18 @@ int run_upgrade(const int len, const char **args) {
     }
 
     const alpm_list_t *alpm_pkg_list = get_pkg_list();
-    dyn_arr pkg_names = dyn_arr_init(0, 0, NULL);
+    dyn_arr pkg_names = dyn_arr_init(1, 0, sizeof (char*), NULL);
     for (const alpm_list_t *p = alpm_pkg_list; p != NULL; p = alpm_list_next(p)) {
         alpm_pkg_t *pkg = p->data;
         const char *packager = alpm_pkg_get_packager(pkg);
 
         // WARN: Assuming unknown packager = AUR
         if (strcmp(packager, "Unknown Packager") == 0) {
-            // pretty sure i can modify it through dyn_arr
             const char *name = alpm_pkg_get_name(pkg);
             int result = pkg_is_in_aur(strlen(name), name);
             switch (result) {
                 case 0: {
-                    dyn_arr_append(&pkg_names, sizeof (char*), &name);
+                    dyn_arr_append(&pkg_names, 1, &name);
                     break;
                 }
                 case 1: {
@@ -45,7 +44,7 @@ int run_upgrade(const int len, const char **args) {
         }
     }
 
-    int ret = upgrade_pkgs(pkg_names.size / sizeof (char*), (const char**)pkg_names.buf);
+    int ret = upgrade_pkgs(pkg_names.size / sizeof (char*), (const char**)pkg_names.data);
     dyn_arr_free(&pkg_names);
     return ret;
 }
