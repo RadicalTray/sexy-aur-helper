@@ -300,7 +300,7 @@ int build_and_install_pkg(const int pkg_name_len,
     }
 
     // TODO: Install as dependencies or explicit
-    for (size_t i = 0; i < built_pkgs.size / sizeof(char*); i++) {
+    for (size_t i = 0; i < built_pkgs.size; i++) {
         char *built_pkg = ((char**)built_pkgs.data)[i];
         char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, "--needed", NULL};
         EXECVP("sudo", sudo_args);

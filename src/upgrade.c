@@ -44,13 +44,19 @@ int run_upgrade(const int len, const char **args) {
         }
     }
 
-    int ret = upgrade_pkgs(pkg_names.size / sizeof (char*), (const char**)pkg_names.data);
+    int ret = upgrade_pkgs(pkg_names.size, (const char**)pkg_names.data);
     dyn_arr_free(&pkg_names);
     return ret;
 }
 
 int upgrade_pkgs(int upgrade_pkg_count, const char *upgrade_pkg_list[]) {
     // TODO: check if needed to upgrade, deps etc
+
+    printf("UPGRADING\n");
+    for (int i = 0; i < upgrade_pkg_count - 1; i++) {
+        printf("%s ", upgrade_pkg_list[i]);
+    }
+    printf("%s\n", upgrade_pkg_list[upgrade_pkg_count - 1]);
 
     return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 0, NULL);
 }
