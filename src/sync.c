@@ -1,3 +1,5 @@
+// WARN: haven't handle waitpid errors
+
 #include "sync.h"
 #include "search.h"
 #include "utils_alpm.h"
@@ -7,16 +9,27 @@
 #include <stdbool.h>
 #include <sys/wait.h>
 
+
+typedef struct {
+    char *pkg_name;
+    char *err_msg;
+} error_t;
+
+
 #define EXECVP(file, args, ...) do {\
     pid_t pid;\
     if ((pid=fork()) == 0) {\
         execvp(file, args);\
         perror("execvp");\
-        exit(1);\
+        exit(EXIT_FAILURE);\
     } else if (pid < 0) {\
         perror("fork");\
     } else {\
-        waitpid(pid, NULL, 0);\
+        int ret = waitpid(pid, NULL, 0);\
+        if (ret == -1) {\
+            perror("waitpid");\
+            exit(EXIT_FAILURE);\
+        }\
     }} while (0)
 
 
@@ -27,7 +40,8 @@ int build_and_install(const int clone_dir_path_len,
                 const int sync_pkg_count,
                 const char **sync_pkg_list);
 
-int build_and_install_pkg(const int pkg_name_len,
+int build_and_install_pkg(dyn_arr *errors,
+                          const int pkg_name_len,
                           const char* pkg_name,
                           const int clone_dir_path_len,
                           const char* clone_dir_path,
@@ -178,14 +192,16 @@ int build_and_install(const int clone_dir_path_len,
                 const char **sync_pkg_list) {
     char *initial_cwd = getcwd(NULL, 0);
 
+    dyn_arr errors = dyn_arr_init(0, 0, sizeof (error_t), NULL);
     for (int i = 0; i < sync_pkg_count; i++) {
         const char* pkg_name = sync_pkg_list[i];
-        int ret = build_and_install_pkg(strlen(pkg_name),
-                              pkg_name,
-                              clone_dir_path_len,
-                              clone_dir_path,
-                              makepkg_opts_len,
-                              makepkg_opts);
+        int ret = build_and_install_pkg(&errors,
+                                        strlen(pkg_name),
+                                        pkg_name,
+                                        clone_dir_path_len,
+                                        clone_dir_path,
+                                        makepkg_opts_len,
+                                        makepkg_opts);
         if (ret != 0) {
             return ret;
         }
@@ -193,11 +209,26 @@ int build_and_install(const int clone_dir_path_len,
 
     chdir(initial_cwd);
     free(initial_cwd);
+
+    if (errors.size > 0) {
+        printf(BOLD_RED "Errors found!" RCN);
+        for (size_t i = 0; i < errors.size; i++) {
+            error_t err = ((error_t*)errors.data)[i];
+            char *pkg_name = err.pkg_name, *err_msg = err.err_msg;
+            printf(BOLD_RED "pkg:" RC " %s\n", pkg_name);
+            printf(BOLD_RED "reason:" RC " %s\n", err_msg);
+            free(pkg_name);
+            free(err_msg);
+        }
+    }
+    dyn_arr_free(&errors);
+
     return 0;
 }
 
 // TODO: tell user about errors occurred
-int build_and_install_pkg(const int pkg_name_len,
+int build_and_install_pkg(dyn_arr *errors,
+                          const int pkg_name_len,
                           const char* pkg_name,
                           const int clone_dir_path_len,
                           const char* clone_dir_path,
@@ -256,8 +287,22 @@ int build_and_install_pkg(const int pkg_name_len,
         printf(BOLD_GREEN "Pulling..." RCN);
         int ret = system("git pull");
         if (ret != 0) {
-            printf(BOLD_RED "An error occurred while pulling repo." RCN);
+            printf(BOLD_RED "An error occurred while pulling repo!" RCN);
             printf(BOLD_RED "Skipping %s" RCN, pkg_name);
+
+            char *pkg_name_cpy = malloc(pkg_name_len + 1);
+            memcpy(pkg_name_cpy, pkg_name, pkg_name_len + 1);
+
+            const char *err_msg = "Git pull error";
+            const size_t err_msg_len = strlen(err_msg);
+            char *err_msg_cpy = malloc(err_msg_len + 1);
+            memcpy(err_msg_cpy, err_msg, err_msg_len + 1);
+
+            error_t err = {
+                .pkg_name = pkg_name_cpy,
+                .err_msg = err_msg_cpy,
+            };
+            dyn_arr_append(errors, 1, &err);
             return 0;
         }
     }
@@ -338,7 +383,44 @@ int build_and_install_pkg(const int pkg_name_len,
     for (size_t i = 0; i < built_pkgs.size; i++) {
         char *built_pkg = ((char**)built_pkgs.data)[i];
         char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, "--needed", NULL};
-        EXECVP("sudo", sudo_args);
+
+        pid_t pid;
+        if ((pid=fork()) == 0) {
+            execvp("sudo", sudo_args);
+            perror("execvp");
+            exit(1);
+        } else if (pid < 0) {
+            perror("fork");
+        } else {
+            int status;
+            int ret = waitpid(pid, &status, 0);
+            if (ret == -1) {
+                perror("waitpid");
+                exit(EXIT_FAILURE);
+            }
+
+            if (WIFEXITED(status)) {
+                if (WEXITSTATUS(status) != 0) {
+                    printf(BOLD_RED "An error occurred while installing package!" RCN);
+                    printf(BOLD_RED "Skipping %s" RCN, pkg_name);
+
+                    char *pkg_name_cpy = malloc(pkg_name_len + 1);
+                    memcpy(pkg_name_cpy, pkg_name, pkg_name_len + 1);
+
+                    const char *err_msg = "Installation error";
+                    const size_t err_msg_len = strlen(err_msg);
+                    char *err_msg_cpy = malloc(err_msg_len + 1);
+                    memcpy(err_msg_cpy, err_msg, err_msg_len + 1);
+
+                    error_t err = {
+                        .pkg_name = pkg_name_cpy,
+                        .err_msg = err_msg_cpy,
+                    };
+                    dyn_arr_append(errors, 1, &err);
+                }
+            }
+        }
+
         free(built_pkg);
     }
     dyn_arr_free(&built_pkgs);
