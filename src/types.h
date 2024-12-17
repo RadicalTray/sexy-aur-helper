@@ -2,6 +2,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+typedef struct {
+    size_t size;
+    char* data;
+} string;
+
 typedef enum {
     NO_CMD,
     SEARCH,

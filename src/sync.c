@@ -275,30 +275,65 @@ int build_and_install_pkg(const int pkg_name_len,
     EXECVP("makepkg", makepkg_args);
 
     FILE *pipe = popen("makepkg --packagelist", "r");
-    dyn_arr dyn_buf = dyn_arr_init(256, 0, sizeof (char), NULL);
-    char buf[128];
-    while (fgets(buf, sizeof buf, pipe) != NULL) {
-        dyn_arr_append(&dyn_buf, sizeof buf, buf);
+
+    // NOTE: getting built_pkgs can definitely be "optimized",
+    //  but i give up
+    dyn_arr dyn_buf = dyn_arr_init(1, 0, sizeof (string), NULL);
+    const size_t buf_size = 128;
+    char buf[buf_size];
+    int whole_buf_strlen = 0;
+    while (fgets(buf, buf_size, pipe) != NULL) {
+        size_t str_len = strlen(buf);
+        whole_buf_strlen += str_len;
+
+        char *str_data = malloc(str_len + 1);
+        strcpy(str_data, buf);
+        string str = {
+            .size = str_len,
+            .data = str_data,
+        };
+
+        dyn_arr_append(&dyn_buf, 1, &str);
     }
+
     pclose(pipe);
 
+    char whole_buf[whole_buf_strlen + 1];
+    int curr_size = 0;
+    for (size_t i = 0; i < dyn_buf.size; i++) {
+        string *data = (string*)dyn_buf.data;
+        string str = data[i];
+
+        memcpy(whole_buf + curr_size, str.data, str.size);
+        curr_size += str.size;
+
+        free(str.data);
+    }
+    whole_buf[whole_buf_strlen] = '\0'; // technically unnecessary
+    dyn_arr_free(&dyn_buf);
+
     dyn_arr built_pkgs = dyn_arr_init(1, 0, sizeof (char*), NULL);
-    for (size_t i = 0; i < dyn_buf.size && ((char*)dyn_buf.data)[i] != '\0'; i++) {
-        int len = 0;
+    for (int i = 0; i < whole_buf_strlen; i++) {
         int j = i;
-        // shouldn't need to check for NUL since output always end in newline
-        while (((char*)dyn_buf.data)[j] != '\n') {
-            len++;
+        int str_len = 0;
+        while (j < whole_buf_strlen) {
+            if (whole_buf[j] == '\n') {
+                break;
+            }
+            str_len++;
             j++;
         }
-        char *pkg = malloc(len + 1);
-        memcpy(pkg, dyn_buf.data, len);
-        pkg[len] = '\0';
+
+        char *pkg = malloc(str_len + 1);
+        memcpy(pkg, whole_buf + i, str_len);
+        pkg[str_len] = '\0';
+
         dyn_arr_append(&built_pkgs, 1, &pkg);
 
-        i += len;
+        i += j;
     }
 
+    printf(BOLD_GREEN "Installing..." RCN);
     // TODO: Install as dependencies or explicit
     for (size_t i = 0; i < built_pkgs.size; i++) {
         char *built_pkg = ((char**)built_pkgs.data)[i];
@@ -306,6 +341,6 @@ int build_and_install_pkg(const int pkg_name_len,
         EXECVP("sudo", sudo_args);
         free(built_pkg);
     }
-    dyn_arr_free(&dyn_buf);
+    dyn_arr_free(&built_pkgs);
     return 0;
 }
