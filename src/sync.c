@@ -380,49 +380,60 @@ int build_and_install_pkg(dyn_arr *errors,
     }
 
     printf(BOLD_GREEN "Installing..." RCN);
+
+    char *sudo_args[4 + built_pkgs.size + 1];
+    sudo_args[0] = "sudo";
+    sudo_args[1] = "pacman";
+    sudo_args[2] = "-U";
+    sudo_args[3] = "--needed";
     for (size_t i = 0; i < built_pkgs.size; i++) {
         char *built_pkg = ((char**)built_pkgs.data)[i];
-        char *sudo_args[] = {"sudo", "pacman", "-U", "--needed", built_pkg, NULL};
+        sudo_args[4 + i] = built_pkg;
+    }
+    sudo_args[4 + built_pkgs.size] = NULL;
 
-        pid_t pid;
-        if ((pid=fork()) == 0) {
-            execvp("sudo", sudo_args);
-            perror("execvp");
-            exit(1);
-        } else if (pid < 0) {
-            perror("fork");
-        } else {
-            int status;
-            int ret = waitpid(pid, &status, 0);
-            if (ret == -1) {
-                perror("waitpid");
-                exit(EXIT_FAILURE);
-            }
-
-            if (WIFEXITED(status)) {
-                if (WEXITSTATUS(status) != 0) {
-                    printf(BOLD_RED "An error occurred while installing package!" RCN);
-                    printf(BOLD_RED "Skipping %s" RCN, pkg_name);
-
-                    char *pkg_name_cpy = malloc(pkg_name_len + 1);
-                    memcpy(pkg_name_cpy, pkg_name, pkg_name_len + 1);
-
-                    const char *err_msg = "Installation error";
-                    const size_t err_msg_len = strlen(err_msg);
-                    char *err_msg_cpy = malloc(err_msg_len + 1);
-                    memcpy(err_msg_cpy, err_msg, err_msg_len + 1);
-
-                    error_t err = {
-                        .pkg_name = pkg_name_cpy,
-                        .err_msg = err_msg_cpy,
-                    };
-                    dyn_arr_append(errors, 1, &err);
-                }
-            }
+    pid_t pid;
+    if ((pid=fork()) == 0) {
+        execvp("sudo", sudo_args);
+        perror("execvp");
+        exit(1);
+    } else if (pid < 0) {
+        perror("fork");
+    } else {
+        int status;
+        int ret = waitpid(pid, &status, 0);
+        if (ret == -1) {
+            perror("waitpid");
+            exit(EXIT_FAILURE);
         }
 
+        if (WIFEXITED(status)) {
+            if (WEXITSTATUS(status) != 0) {
+                printf(BOLD_RED "An error occurred while installing package!" RCN);
+                printf(BOLD_RED "Skipping %s" RCN, pkg_name);
+
+                char *pkg_name_cpy = malloc(pkg_name_len + 1);
+                memcpy(pkg_name_cpy, pkg_name, pkg_name_len + 1);
+
+                const char *err_msg = "Installation error";
+                const size_t err_msg_len = strlen(err_msg);
+                char *err_msg_cpy = malloc(err_msg_len + 1);
+                memcpy(err_msg_cpy, err_msg, err_msg_len + 1);
+
+                error_t err = {
+                    .pkg_name = pkg_name_cpy,
+                    .err_msg = err_msg_cpy,
+                };
+                dyn_arr_append(errors, 1, &err);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < built_pkgs.size; i++) {
+        char *built_pkg = ((char**)built_pkgs.data)[i];
         free(built_pkg);
     }
     dyn_arr_free(&built_pkgs);
+
     return 0;
 }
