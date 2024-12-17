@@ -227,6 +227,7 @@ int build_and_install(const int clone_dir_path_len,
 }
 
 // TODO: tell user about errors occurred
+// TODO: Install as dependencies or explicit
 int build_and_install_pkg(dyn_arr *errors,
                           const int pkg_name_len,
                           const char* pkg_name,
@@ -359,14 +360,14 @@ int build_and_install_pkg(dyn_arr *errors,
 
     dyn_arr built_pkgs = dyn_arr_init(1, 0, sizeof (char*), NULL);
     for (int i = 0; i < whole_buf_strlen; i++) {
-        int j = i;
+        int char_read = 0;
         int str_len = 0;
-        while (j < whole_buf_strlen) {
+        for (int j = i; j < whole_buf_strlen; j++) {
             if (whole_buf[j] == '\n') {
                 break;
             }
+            char_read++;
             str_len++;
-            j++;
         }
 
         char *pkg = malloc(str_len + 1);
@@ -375,14 +376,13 @@ int build_and_install_pkg(dyn_arr *errors,
 
         dyn_arr_append(&built_pkgs, 1, &pkg);
 
-        i += j;
+        i += char_read;
     }
 
     printf(BOLD_GREEN "Installing..." RCN);
-    // TODO: Install as dependencies or explicit
     for (size_t i = 0; i < built_pkgs.size; i++) {
         char *built_pkg = ((char**)built_pkgs.data)[i];
-        char *sudo_args[] = {"sudo", "pacman", "-U", built_pkg, "--needed", NULL};
+        char *sudo_args[] = {"sudo", "pacman", "-U", "--needed", built_pkg, NULL};
 
         pid_t pid;
         if ((pid=fork()) == 0) {
