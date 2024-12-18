@@ -31,8 +31,11 @@ typedef enum {
 
 typedef struct {
     char *pkg_name;
+    size_t pkg_name_len;
     char *pkg_dir_path;
+    size_t pkg_dir_path_len;
     char *built_pkg_path;
+    size_t built_pkg_path_len;
     e_diff_type diff;
 } pkginfo_t;
 
@@ -376,8 +379,7 @@ inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
                 }
                 FILE *p = popen("git diff HEAD FETCH_HEAD");
                 char buf[1024];
-                while (fread(buf, sizeof char, (sizeof buf) - 1, p) != NULL) {
-                    buf[(sizeof buf) - 1] = '\0';
+                while (fgets(buf, sizeof buf, p) != NULL) {
                     if (strlen(buf) != 0) {
                         diff = UPDATE;
                     }
@@ -395,8 +397,9 @@ inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
 
             pkginfo_t pkginfo = {
                 .pkg_name = pkg_name_cpy,
+                .pkg_name_len = pkg_name_len,
                 .pkg_dir_path = pkg_dir_path_cpy,
-                .built_pkg_path = NULL,
+                .pkg_dir_path_len = pkg_dir_path_len,
                 .diff = diff,
             };
             dyn_arr_append(&fetched_pkgs, 1, &pkginfo);
@@ -405,11 +408,16 @@ inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
     return fetched_pkgs;
 }
 
+// TODO: handle build error
 inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
     dyn_arr built_pkgs = dyn_arr_init(fetched_pkgs.size, 0, sizeof pkginfo_t, NULL);
     for (size_t i = 0; i < fetched_pkgs.size; i++) {
-        pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
-        chdir(pkginfo.pkg_dir_path);
+        const pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
+        const char* pkg_name = pkginfo.pkg_name;
+        const size_t pkg_name_len = pkginfo.pkg_name_len;
+        const char* pkg_dir_path = pkginfo.pkg_dir_path;
+        const size_t pkg_dir_path_len = pkginfo.pkg_dir_path_len;
+        chdir(pkg_dir_path);
         system("git reset --hard origin");
 
         char *makepkg_args[1 + makepkg_opts_len + 1];
@@ -426,8 +434,9 @@ inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
         const size_t buf_size = 128;
         char buf[buf_size];
         int whole_buf_strlen = 0;
-        while (fread(buf, sizeof char, buf_size - 1, pipe) != NULL) {
-            buf[buf_size - 1] = '\0';
+        int read_count;
+        while ((read_count=fread(buf, sizeof char, buf_size - 1, pipe)) != 0) {
+            buf[read_count] = '\0';
             size_t str_len = strlen(buf);
             whole_buf_strlen += str_len;
 
@@ -440,6 +449,7 @@ inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
 
             dyn_arr_append(&dyn_buf, 1, &str);
         }
+        // BUG: HANDLE FREAD ERROR
 
         pclose(pipe);
 
@@ -457,27 +467,42 @@ inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
         whole_buf[whole_buf_strlen] = '\0'; // technically unnecessary
         dyn_arr_free(&dyn_buf);
 
-        dyn_arr built_pkgs = dyn_arr_init(1, 0, sizeof (char*), NULL);
         for (int i = 0; i < whole_buf_strlen; i++) {
             int char_read = 0;
-            int str_len = 0;
+            int built_pkg_path_len = 0;
             for (int j = i; j < whole_buf_strlen; j++) {
                 if (whole_buf[j] == '\n') {
                     break;
                 }
                 char_read++;
-                str_len++;
+                built_pkg_path_len++;
             }
 
-            char *pkg = malloc(str_len + 1);
-            memcpy(pkg, whole_buf + i, str_len);
-            pkg[str_len] = '\0';
+            char *built_pkg_path = malloc(built_pkg_path_len + 1);
+            memcpy(built_pkg_path, whole_buf + i, built_pkg_path_len);
+            built_pkg_path[built_pkg_path_len] = '\0';
 
-            dyn_arr_append(&built_pkgs, 1, &pkg);
+            char *pkg_name_cpy = malloc(pkg_name_len + 1);
+            strcpy(pkg_name_cpy, pkg_name);
+
+            char *pkg_dir_path_cpy = malloc(pkg_dir_path_len + 1);
+            strcpy(pkg_dir_path_cpy, pkg_dir_path);
+
+            // PERF: technically install_pkgs don't need things other than built_pkg_path and pkg_dir_path
+            pkginfo_t pkginfo = {
+                .pkg_name = pkg_name_cpy,
+                .pkg_name_len = pkg_name_len,
+                .pkg_dir_path = pkg_dir_path_cpy,
+                .pkg_dir_path_len = pkg_dir_path_len,
+                .built_pkg_path = built_pkg_path,
+                .built_pkg_path_len = built_pkg_path_len,
+            };
+            dyn_arr_append(&built_pkgs, 1, &pkginfo);
 
             i += char_read;
         }
     }
+    return built_pkgs;
 }
 
 inline void install_pkgs() {
