@@ -42,6 +42,7 @@ void setup() {
                 perror("mkdir");
                 exit(EXIT_FAILURE);
             }
+            chdir(g_cache_dir);
 
             if (system("git init") != 0) {
                 exit(EXIT_FAILURE);
@@ -119,8 +120,10 @@ int main(const int argc, const char **argv) {
 
 // this is definitely overkill lol
 void cleanup() {
-    free_aur_pkg_list(&g_search_list);
+    free_aur_pkg_list(&g_pkgbase_list);
+    free(g_pkgbase_list_filepath);
+    free_aur_pkg_list(&g_pkg_list);
+    free(g_pkg_list_filepath);
     alpm_release(g_alpm_handle);
     free(g_cache_dir);
-    free(g_pkg_list_filepath);
 }

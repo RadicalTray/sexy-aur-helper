@@ -45,9 +45,9 @@ int run_update_pkg_list(const int len, const char **args) {
     return 0;
 }
 
-const aur_pkg_list_t* get(aur_pkg_list_t li) {
-    if (!li.init) {
-        li.init = true;
+const aur_pkg_list_t* get(aur_pkg_list_t *li, const char* li_filepath) {
+    if (!li->init) {
+        li->init = true;
 
         if (access(g_pkg_list_filepath, F_OK) != 0) {
             if (run_update_pkg_list(0, NULL) != 0) {
@@ -56,34 +56,34 @@ const aur_pkg_list_t* get(aur_pkg_list_t li) {
             }
         }
 
-        FILE *p_file = fopen(g_pkg_list_filepath, "r");
+        FILE *p_file = fopen(li_filepath, "r");
         if (p_file == NULL) {
             fprintf(stderr, PKG_LIST_FILENAME " couldn't be opened!\n");
             return NULL;
         }
 
         struct stat pkg_list_filestat;
-        stat(g_pkg_list_filepath, &pkg_list_filestat);
+        stat(li_filepath, &pkg_list_filestat);
 
         const int filesize = pkg_list_filestat.st_size;
         char *pkg_list_buf = malloc(filesize);
         fread(pkg_list_buf, filesize, 1, p_file); // last char of pkg_list_buf should be char '\n' or int = 10
         fclose(p_file);
 
-        li.size = filesize;
-        li.buf = pkg_list_buf;
+        li->size = filesize;
+        li->buf = pkg_list_buf;
     }
 
-    return &li;
+    return li;
 }
 
 // returns file contents and filesize of the package.txt
 //
 // don't modify aur_pkg_list_t
 const aur_pkg_list_t* get_aur_pkg_list() {
-    return get(g_search_list);
+    return get(&g_pkg_list, g_pkg_list_filepath);
 }
 
 const aur_pkg_list_t* get_aur_pkgbase_list() {
-    return get(g_pkgbase_list);
+    return get(&g_pkgbase_list, g_pkgbase_list_filepath);
 }

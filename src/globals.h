@@ -20,7 +20,7 @@ extern const Opts g_default_opts;
 extern char *g_cache_dir;
 extern char *g_pkg_list_filepath;
 extern char *g_pkgbase_list_filepath;
-extern aur_pkg_list_t g_search_list;
+extern aur_pkg_list_t g_pkg_list;
 extern aur_pkg_list_t g_pkgbase_list;
 extern alpm_handle_t *g_alpm_handle;
 extern alpm_db_t *g_alpm_localdb;
