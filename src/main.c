@@ -24,20 +24,39 @@ static void SIGINT_HANDLER(int sig) {
 }
 #pragma GCC diagnostic pop
 
-int main(const int argc, const char **argv) {
+void setup() {
     if (signal(SIGINT, SIGINT_HANDLER) == SIG_ERR) {
         perror("SIGINT");
         exit(EXIT_FAILURE);
     }
 
     if (set_globals() != 0) {
-        return 1;
+        exit(EXIT_FAILURE);
     }
 
-    int mkdir_err = mkdir(g_cache_dir, S_IRWXU);
-    if (mkdir_err != 0 && errno != EEXIST) {
-        perror("mkdir");
+    struct stat s;
+    const int stat_ret = stat(g_cache_dir, &s);
+    if (stat_ret == -1) {
+        if (errno == ENOENT) {
+            int mkdir_err = mkdir(g_cache_dir, S_IRWXU);
+            if (mkdir_err != 0) {
+                perror("mkdir");
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            perror("stat");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        if (!S_ISDIR(s.st_mode)) {
+            fprintf(stderr, "%s already exists, but is not a directory!", g_cache_dir);
+            exit(EXIT_FAILURE);
+        }
     }
+}
+
+int main(const int argc, const char **argv) {
+    setup();
 
     if (argc <= 1) {
         print_help(stderr);

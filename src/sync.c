@@ -1,5 +1,7 @@
 // WARN: haven't handle waitpid errors
 
+// TODO: fetch every package -> makepkg every pkg -> install all
+
 #include "sync.h"
 #include "search.h"
 #include "utils_alpm.h"
@@ -226,8 +228,9 @@ int build_and_install(const int clone_dir_path_len,
     return 0;
 }
 
-// TODO: tell user about errors occurred
 // TODO: Install as dependencies or explicit
+// TODO: Check for changes in git repo
+// TODO: Download all packages at the end
 int build_and_install_pkg(dyn_arr *errors,
                           const int pkg_name_len,
                           const char* pkg_name,
@@ -244,9 +247,9 @@ int build_and_install_pkg(dyn_arr *errors,
     memcpy(pkg_dir_path + clone_dir_path_len + 1, pkg_name, pkg_name_len + 1);
 
     struct stat s;
-    const int err = stat(pkg_dir_path, &s);
+    const int ret = stat(pkg_dir_path, &s);
     bool git_pulled = false;
-    if (err == -1) {
+    if (ret == -1) {
         if (errno == ENOENT) {
             const int aur_url_len = strlen(EXT_AUR_PKG_URL);
             const char *suffix = ".git";
@@ -286,7 +289,7 @@ int build_and_install_pkg(dyn_arr *errors,
     //  hasn't handled all possible errors from system()
     if (!git_pulled) {
         printf(BOLD_GREEN "Pulling..." RCN);
-        int ret = system("git pull");
+        int ret = system("git fetch; git reset --hard origin/master");
         if (ret != 0) {
             printf(BOLD_RED "An error occurred while pulling repo!" RCN);
             printf(BOLD_RED "Skipping %s" RCN, pkg_name);

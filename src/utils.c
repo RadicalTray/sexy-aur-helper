@@ -16,13 +16,30 @@ void print_help(FILE *fptr) {
 }
 
 int set_globals() {
-    const char *cache_home = getenv(XDG_CACHE_HOME);
-    if (strlen(cache_home) <= 0) {
-        fprintf(stderr,"Empty " "$" XDG_CACHE_HOME "\n");
-        return 1;
+    char *cache_home;
+    const char *xdg_cache_home = getenv(XDG_CACHE_HOME);
+    if (xdg_cache_home == NULL) {
+        fprintf(stderr, BOLD_RED "$" XDG_CACHE_HOME " is not set!" RCN);
+
+        const char *user_home = getenv("HOME");
+        if (user_home == NULL) {
+            fprintf(stderr, BOLD_RED "$HOME is not set! WHAT DID YOU DO?" RCN);
+            return 1;
+        }
+
+        cache_home = str_concat(user_home, "/.config");
+        fprintf(stderr, BOLD_RED "Defaulting to %s" RCN, cache_home);
+    } else {
+        int xdg_cache_home_len = strlen(xdg_cache_home);
+        cache_home = malloc(xdg_cache_home_len + 1);
+        strcpy(cache_home, xdg_cache_home);
     }
+
     g_cache_dir = str_concat(cache_home, "/" PROGRAM_NAME);
+    free(cache_home);
+
     g_pkg_list_filepath = str_concat(g_cache_dir, "/" PKG_LIST_FILENAME);
+
     return 0;
 }
 
