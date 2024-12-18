@@ -34,8 +34,7 @@ typedef struct {
     size_t pkg_name_len;
     char *pkg_dir_path;
     size_t pkg_dir_path_len;
-    char *built_pkg_path;
-    size_t built_pkg_path_len;
+    dyn_arr built_pkg_paths;
     e_diff_type diff;
 } pkginfo_t;
 
@@ -84,11 +83,11 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
                        int sync_pkg_count, const char **sync_pkg_list,
                        int ext_clone_dir_path_len, const char *ext_clone_dir_path);
 
-inline dyn_arr build_pkgs(dyn_arr *p_errors,
-                          const dyn_arr fetched_pkgs,
-                          const int makepkg_opts_len, char *const makepkg_opts[]);
+inline int build_pkgs(dyn_arr *p_errors,
+                      dyn_arr *pkginfos,
+                      const int makepkg_opts_len, char *const makepkg_opts[]);
 
-inline void install_pkgs(dyn_arr *p_errors, const dyn_arr built_pkgs);
+inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos);
 
 void append_err(dyn_arr *p_errors, const int pkg_name_len, const char* pkg_name, const char *err_msg) {
     char *pkg_name_cpy = malloc(pkg_name_len + 1);
@@ -195,9 +194,6 @@ int run_sync(const int len, const char **args) {
     return ret;
 }
 
-// TODO:
-//  - tell when something (PKGBUILD changes, etc) is changed from the aur
-//
 // TODO: get deps, make deps, handle aur deps
 //
 // FILE *pipe = popen("source PKGBUILD; echo ${makedepends[*]} ${depends[*]}");
@@ -239,12 +235,12 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
 
     dyn_arr errors = dyn_arr_init(0, 0, sizeof (error_t), NULL);
 
-    dyn_arr fetched_pkgs = fetch_pkgs(&errors,
-                                      sync_pkg_count, sync_pkg_list,
-                                      ext_clone_dir_path_len, ext_clone_dir_path);
+    dyn_arr pkginfos = fetch_pkgs(&errors,
+                                  sync_pkg_count, sync_pkg_list,
+                                  ext_clone_dir_path_len, ext_clone_dir_path);
 
-    for (size_t i = 0; i < fetched_pkgs.size; i++) {
-        pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
+    for (size_t i = 0; i < pkginfos.size; i++) {
+        pkginfo_t pkginfo = ((pkginfo_t*)pkginfos.data)[i];
 
         if (pkginfo.diff == NO_CHANGES) {
             continue;
@@ -282,7 +278,7 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
                 accept = 2;
             } else {
                 // flush input buf ig
-                // idk what this actually does
+                // idk if this actually works
                 scanf("%*[^\n]");
                 scanf("%*c");
             }
@@ -298,23 +294,19 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
         }
     }
 
-    // git reset origin --hard
-    dyn_arr built_pkgs = build_pkgs(&errors, fetched_pkgs, makepkg_opts_len, makepkg_opts);
-    for (size_t i = 0; i < fetched_pkgs.size; i++) {
-        pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
-        free(pkginfo.pkg_name);
-        free(pkginfo.pkg_dir_path);
-    }
-    dyn_arr_free(&fetched_pkgs);
+    int total_pkg_count = build_pkgs(&errors, &pkginfos, makepkg_opts_len, makepkg_opts);
 
-    install_pkgs(&errors, built_pkgs);
-    for (size_t i = 0; i < built_pkgs.size; i++) {
-        pkginfo_t pkginfo = ((pkginfo_t*)built_pkgs.data)[i];
+    install_pkgs(&errors, total_pkg_count, pkginfos);
+    for (size_t i = 0; i < pkginfos.size; i++) {
+        pkginfo_t pkginfo = ((pkginfo_t*)pkginfos.data)[i];
         free(pkginfo.pkg_name);
         free(pkginfo.pkg_dir_path);
-        free(pkginfo.built_pkg_path);
+        for (size_t j = 0; j < pkginfo.built_pkg_paths.size; j++) {
+            free(((char**)pkginfo.built_pkg_paths.data)[j]);
+        }
+        dyn_arr_free(&(pkginfo.built_pkg_paths));
     }
-    dyn_arr_free(&built_pkgs);
+    dyn_arr_free(&pkginfos);
 
     chdir(initial_cwd);
     free(initial_cwd);
@@ -338,7 +330,7 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
 dyn_arr fetch_pkgs(dyn_arr *p_errors,
                        int sync_pkg_count, const char **sync_pkg_list,
                        int ext_clone_dir_path_len, const char *ext_clone_dir_path) {
-    dyn_arr fetched_pkgs = dyn_arr_init(sync_pkg_count, 0, sizeof (pkginfo_t), NULL);
+    dyn_arr pkginfos = dyn_arr_init(sync_pkg_count, 0, sizeof (pkginfo_t), NULL);
     for (int i = 0; i < sync_pkg_count; i++) {
         const char* pkg_name = sync_pkg_list[i];
         const int pkg_name_len = strlen(pkg_name);
@@ -428,26 +420,24 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
                 .pkg_name_len = pkg_name_len,
                 .pkg_dir_path = pkg_dir_path_cpy,
                 .pkg_dir_path_len = pkg_dir_path_len,
+                .built_pkg_paths = dyn_arr_init(1, 0, sizeof (char*), NULL),
                 .diff = diff,
             };
-            dyn_arr_append(&fetched_pkgs, 1, &pkginfo);
+            dyn_arr_append(&pkginfos, 1, &pkginfo);
         }
     }
-    return fetched_pkgs;
+    return pkginfos;
 }
 
 // TODO: handle build error
-inline dyn_arr build_pkgs(dyn_arr *p_errors,
-                          const dyn_arr fetched_pkgs,
-                          const int makepkg_opts_len, char *const makepkg_opts[]
+inline int build_pkgs(dyn_arr *p_errors,
+                      dyn_arr *p_pkginfos,
+                      const int makepkg_opts_len, char *const makepkg_opts[]
 ) {
-    dyn_arr built_pkgs = dyn_arr_init(fetched_pkgs.size, 0, sizeof (pkginfo_t), NULL);
-    for (size_t i = 0; i < fetched_pkgs.size; i++) {
-        const pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
-        const char* pkg_name = pkginfo.pkg_name;
-        const size_t pkg_name_len = pkginfo.pkg_name_len;
-        const char* pkg_dir_path = pkginfo.pkg_dir_path;
-        const size_t pkg_dir_path_len = pkginfo.pkg_dir_path_len;
+    int total_pkg_count = 0;
+    for (size_t i = 0; i < p_pkginfos->size; i++) {
+        pkginfo_t *p_pkginfo = &(((pkginfo_t*)p_pkginfos->data)[i]);
+        const char* pkg_dir_path = p_pkginfo->pkg_dir_path;
         chdir(pkg_dir_path);
         system("git reset --hard origin");
 
@@ -509,46 +499,39 @@ inline dyn_arr build_pkgs(dyn_arr *p_errors,
                 built_pkg_path_len++;
             }
 
+            if (built_pkg_path_len == 0) {
+                break;
+            }
+
             char *built_pkg_path = malloc(built_pkg_path_len + 1);
             memcpy(built_pkg_path, whole_buf + i, built_pkg_path_len);
             built_pkg_path[built_pkg_path_len] = '\0';
 
-            char *pkg_name_cpy = malloc(pkg_name_len + 1);
-            strcpy(pkg_name_cpy, pkg_name);
-
-            char *pkg_dir_path_cpy = malloc(pkg_dir_path_len + 1);
-            strcpy(pkg_dir_path_cpy, pkg_dir_path);
-
-            // PERF: technically install_pkgs don't need things other than built_pkg_path and pkg_dir_path
-            pkginfo_t pkginfo = {
-                .pkg_name = pkg_name_cpy,
-                .pkg_name_len = pkg_name_len,
-                .pkg_dir_path = pkg_dir_path_cpy,
-                .pkg_dir_path_len = pkg_dir_path_len,
-                .built_pkg_path = built_pkg_path,
-                .built_pkg_path_len = built_pkg_path_len,
-            };
-            dyn_arr_append(&built_pkgs, 1, &pkginfo);
-
+            dyn_arr_append(&(p_pkginfo->built_pkg_paths), 1, &built_pkg_path);
+            total_pkg_count++;
             i += char_read;
         }
     }
-    return built_pkgs;
+    return total_pkg_count;
 }
 
-inline void install_pkgs(dyn_arr *p_errors, const dyn_arr built_pkgs) {
+inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos) {
     printf(BOLD_GREEN "Installing..." RCN);
 
-    char *sudo_args[4 + built_pkgs.size + 1];
+    char *sudo_args[4 + total_pkg_count + 1];
     sudo_args[0] = "sudo";
     sudo_args[1] = "pacman";
     sudo_args[2] = "-U";
     sudo_args[3] = "--needed";
-    for (size_t i = 0; i < built_pkgs.size; i++) {
-        pkginfo_t pkginfo = ((pkginfo_t*)built_pkgs.data)[i];
-        sudo_args[4 + i] = pkginfo.built_pkg_path;
+    int idx = 0;
+    for (size_t i = 0; i < pkginfos.size; i++) {
+        pkginfo_t pkginfo = ((pkginfo_t*)pkginfos.data)[i];
+        for (size_t j = 0; j < pkginfo.built_pkg_paths.size; j++) {
+            sudo_args[4 + idx] = ((char**)pkginfo.built_pkg_paths.data)[j];
+            idx++;
+        }
     }
-    sudo_args[4 + built_pkgs.size] = NULL;
+    sudo_args[4 + pkginfos.size] = NULL;
 
     pid_t pid;
     if ((pid=fork()) == 0) {
