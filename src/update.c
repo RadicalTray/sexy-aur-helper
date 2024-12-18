@@ -17,16 +17,28 @@ int run_update_pkg_list(const int len, const char **args) {
     }
 
     // smartass
-    const char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
-    const int sh_cmd_len = strlen(sh_cmd);
-    const int filepath_len = strlen(g_pkg_list_filepath);
-    const int cmd_len = sh_cmd_len + filepath_len;
-    char cmd[cmd_len + 1]; // This should allocate it on the stack right?
-    memcpy(cmd, sh_cmd, sh_cmd_len);
-    memcpy(cmd + sh_cmd_len, g_pkg_list_filepath, filepath_len + 1);
+    char *sh_cmd = "curl https://aur.archlinux.org/packages.gz | gzip -cd > ";
+    int sh_cmd_len = strlen(sh_cmd);
+    int filepath_len = strlen(g_pkg_list_filepath);
+    int cmd_len = sh_cmd_len + filepath_len;
+    char cmd1[cmd_len + 1];
+    memcpy(cmd1, sh_cmd, sh_cmd_len);
+    memcpy(cmd1 + sh_cmd_len, g_pkg_list_filepath, filepath_len + 1);
 
-    // TODO: use exec()
-    if (exec_sh_cmd(cmd) != 0) {
+    if (exec_sh_cmd(cmd1) != 0) {
+        fprintf(stderr, "An error happended while trying to fetch the package list!\n");
+        return 1;
+    }
+
+    sh_cmd = "curl https://aur.archlinux.org/pkgbase.gz | gzip -cd > ";
+    sh_cmd_len = strlen(sh_cmd);
+    filepath_len = strlen(g_pkgbase_list_filepath);
+    cmd_len = sh_cmd_len + filepath_len;
+    char cmd2[cmd_len + 1];
+    memcpy(cmd2, sh_cmd, sh_cmd_len);
+    memcpy(cmd2 + sh_cmd_len, g_pkgbase_list_filepath, filepath_len + 1);
+
+    if (exec_sh_cmd(cmd2) != 0) {
         fprintf(stderr, "An error happended while trying to fetch the package list!\n");
         return 1;
     }
@@ -66,4 +78,36 @@ const aur_pkg_list_t* get_aur_pkg_list() {
     }
 
     return &g_search_list;
+}
+
+const aur_pkg_list_t* get_aur_pkgbase_list() {
+    if (!g_pkgbase_list.init) {
+        g_pkgbase_list.init = true;
+
+        if (access(g_pkgbase_list_filepath, F_OK) != 0) {
+            if (run_update_pkg_list(0, NULL) != 0) {
+                fprintf(stderr, "Couldn't fetch the package list!\n");
+                return NULL;
+            }
+        }
+
+        FILE *p_file = fopen(g_pkgbase_list_filepath, "r");
+        if (p_file == NULL) {
+            fprintf(stderr, PKGBASE_LIST_FILENAME " couldn't be opened!\n");
+            return NULL;
+        }
+
+        struct stat pkg_list_filestat;
+        stat(g_pkgbase_list_filepath, &pkg_list_filestat);
+
+        const int filesize = pkg_list_filestat.st_size;
+        char *pkg_list_buf = malloc(filesize);
+        fread(pkg_list_buf, filesize, 1, p_file); // last char of pkg_list_buf should be char '\n' or int = 10
+        fclose(p_file);
+
+        g_pkgbase_list.size = filesize;
+        g_pkgbase_list.buf = pkg_list_buf;
+    }
+
+    return &g_pkgbase_list;
 }

@@ -114,3 +114,31 @@ int pkg_is_in_aur(const int sync_pkg_name_len, const char *sync_pkg_name) {
     return 1;
 }
 
+int pkg_is_pkgbase_in_aur(const int sync_pkg_name_len, const char *sync_pkg_name) {
+    const aur_pkg_list_t *pkg_list = get_aur_pkgbase_list();
+    if (pkg_list == NULL) {
+        fprintf(stderr, "get_aur_pkgbase_list() failed");
+        return 69;
+    }
+    const int pkg_list_size = pkg_list->size;
+    const char *pkg_list_buf = pkg_list->buf;
+
+    for (int i = 0; i < pkg_list_size; i++) {
+        int pkg_name_len = 0;
+        int matched_char_count = 0;
+        while (pkg_list_buf[i + pkg_name_len] != '\n') {
+            matched_char_count += pkg_name_len < sync_pkg_name_len &&
+                sync_pkg_name[pkg_name_len] == pkg_list_buf[i + pkg_name_len];
+            pkg_name_len++;
+        }
+
+        if (sync_pkg_name_len == pkg_name_len &&
+            matched_char_count == sync_pkg_name_len) {
+            return 0;
+        }
+
+        i += pkg_name_len; // don't forget to move i to '\n'
+    }
+
+    return 1;
+}

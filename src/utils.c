@@ -39,6 +39,7 @@ int set_globals() {
     free(cache_home);
 
     g_pkg_list_filepath = str_concat(g_cache_dir, "/" PKG_LIST_FILENAME);
+    g_pkgbase_list_filepath = str_concat(g_cache_dir, "/" PKGBASE_LIST_FILENAME);
 
     return 0;
 }

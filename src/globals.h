@@ -8,6 +8,7 @@
 #define RCN "\033[0m\n"
 
 #define PKG_LIST_FILENAME "packages.txt"
+#define PKGBASE_LIST_FILENAME "pkgbase.txt"
 #define XDG_CACHE_HOME "XDG_CACHE_HOME"
 #define PROGRAM_NAME "saur"
 #define EXT_AUR_PKG_URL "https://aur.archlinux.org/"
@@ -18,6 +19,8 @@ extern const Cmd g_cmds[g_cmds_len];
 extern const Opts g_default_opts;
 extern char *g_cache_dir;
 extern char *g_pkg_list_filepath;
+extern char *g_pkgbase_list_filepath;
 extern aur_pkg_list_t g_search_list;
+extern aur_pkg_list_t g_pkgbase_list;
 extern alpm_handle_t *g_alpm_handle;
 extern alpm_db_t *g_alpm_localdb;

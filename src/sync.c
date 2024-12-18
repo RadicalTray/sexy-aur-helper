@@ -1,10 +1,10 @@
 // WARN: haven't handle waitpid errors
 // WARN: Assuming system() succeeds
 
-// TODO: fetch every package -> makepkg every pkg -> install all
 // TODO: Install as dependencies or explicit
-// TODO: Check for changes in git repo
-// TODO: Download all packages at the end
+// TODO(NOT TESTED): Check for changes in git repo
+// TODO: don't install packages that are already built?
+// TODO: Handle build error
 
 #include "sync.h"
 #include "search.h"
@@ -206,15 +206,11 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
     for (int i = 0; i < sync_pkg_count; i++) {
         int ret = pkg_is_in_aur(strlen(sync_pkg_list[i]), sync_pkg_list[i]);
         // could've used if else but nvm
-        switch (ret) {
-            case 1: {
-                fprintf(stdout, "'%s' not found in aur package list.\n", sync_pkg_list[i]);
-                error = true;
-                break;
-            } case 69: {
-                error = true;
-                break;
-            }
+        if (ret != 0) {
+            error = true;
+        }
+        if (ret == 1) {
+            fprintf(stdout, "'%s' not found in aur package list.\n", sync_pkg_list[i]);
         }
     }
     if (error) {
@@ -334,6 +330,12 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
     for (int i = 0; i < sync_pkg_count; i++) {
         const char* pkg_name = sync_pkg_list[i];
         const int pkg_name_len = strlen(pkg_name);
+
+        // TODO: handle this err
+        if (pkg_is_pkgbase_in_aur(pkg_name_len, pkg_name) != 0) {
+            continue;
+        }
+
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
         memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);

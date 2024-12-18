@@ -6,3 +6,4 @@ void search_pkg(const int search_strslen,
                 int *dst_matched_pkgs_count,
                 char ***dst_matched_pkgs);
 int pkg_is_in_aur(const int sync_pkg_name_len, const char *sync_pkg_name);
+int pkg_is_pkgbase_in_aur(const int sync_pkg_name_len, const char *sync_pkg_name);
