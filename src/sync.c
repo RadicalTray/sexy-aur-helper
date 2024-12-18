@@ -300,12 +300,21 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
 
     // git reset origin --hard
     dyn_arr built_pkgs = build_pkgs(&errors, fetched_pkgs, makepkg_opts_len, makepkg_opts);
+    for (size_t i = 0; i < fetched_pkgs.size; i++) {
+        pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
+        free(pkginfo.pkg_name);
+        free(pkginfo.pkg_dir_path);
+    }
     dyn_arr_free(&fetched_pkgs);
-    // BUG: free str in fetched_pkgs
 
     install_pkgs(&errors, built_pkgs);
+    for (size_t i = 0; i < built_pkgs.size; i++) {
+        pkginfo_t pkginfo = ((pkginfo_t*)built_pkgs.data)[i];
+        free(pkginfo.pkg_name);
+        free(pkginfo.pkg_dir_path);
+        free(pkginfo.built_pkg_path);
+    }
     dyn_arr_free(&built_pkgs);
-    // BUG: free str in built_pkgs
 
     chdir(initial_cwd);
     free(initial_cwd);
