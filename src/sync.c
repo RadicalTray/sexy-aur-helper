@@ -74,15 +74,23 @@ typedef struct {
             fprintf(stderr, "%s already exists, but is not a directory!", g_cache_dir);\
             exit(EXIT_FAILURE);\
         }\
-    }\
-while (0)
+    } } while (0)
 
 
-#define CMD_CHECK_EXISTS(cmd) system("which " cmd " > /dev/null 2>&1")
-#define CMD_READ_GIT_LSFILES(cmd) system(cmd " $(git ls-files)")
+#define CMD_CHECK_EXISTS(cmd) system("which " cmd " > /dev/null 2>&1") == 0
+#define CMD_READ_GIT_LSFILES(cmd) system("git ls-files | xargs --no-run-if-empty " cmd)
 
+dyn_arr fetch_pkgs(dyn_arr *p_errors,
+                       int sync_pkg_count, const char **sync_pkg_list,
+                       int ext_clone_dir_path_len, const char *ext_clone_dir_path);
 
-inline void append_err(dyn_arr *p_errors, const int pkg_name_len, const char* pkg_name, const char *err_msg) {
+inline dyn_arr build_pkgs(dyn_arr *p_errors,
+                          const dyn_arr fetched_pkgs,
+                          const int makepkg_opts_len, char *const makepkg_opts[]);
+
+inline void install_pkgs(dyn_arr *p_errors, const dyn_arr built_pkgs);
+
+void append_err(dyn_arr *p_errors, const int pkg_name_len, const char* pkg_name, const char *err_msg) {
     char *pkg_name_cpy = malloc(pkg_name_len + 1);
     memcpy(pkg_name_cpy, pkg_name, pkg_name_len + 1);
 
@@ -236,7 +244,7 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
                                       ext_clone_dir_path_len, ext_clone_dir_path);
 
     for (size_t i = 0; i < fetched_pkgs.size; i++) {
-        pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i]
+        pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
 
         if (pkginfo.diff == NO_CHANGES) {
             continue;
@@ -260,15 +268,21 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
         }
 
         char str[8];
-        bool accept = false;
-        printf("Accept [Y/n]: ");
+        int accept = 0;
+        printf("Accept [Y/n/a]: ");
         if (fgets(str, sizeof (str), stdin)) {
             if (strcmp(str, "\n") == 0 ||
                 strcmp(str, "y\n") == 0 ||
                 strcmp(str, "Y\n") == 0
             ) {
-                accept = true;
-            } else { // flush input buf ig
+                accept = 1;
+            } else if (strcmp(str, "a\n") == 0 ||
+                       strcmp(str, "A\n") == 0
+            ) {
+                accept = 2;
+            } else {
+                // flush input buf ig
+                // idk what this actually does
                 scanf("%*[^\n]");
                 scanf("%*c");
             }
@@ -277,17 +291,21 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
             exit(69);
         }
 
-        if (!accept) {
+        if (accept == 1) {
             return 0;
+        } else if (accept == 2) {
+            break;
         }
     }
 
     // git reset origin --hard
-    dyn_arr built_pkgs = build_pkgs(&errors, fetched_pkgs);
+    dyn_arr built_pkgs = build_pkgs(&errors, fetched_pkgs, makepkg_opts_len, makepkg_opts);
     dyn_arr_free(&fetched_pkgs);
+    // BUG: free str in fetched_pkgs
 
     install_pkgs(&errors, built_pkgs);
     dyn_arr_free(&built_pkgs);
+    // BUG: free str in built_pkgs
 
     chdir(initial_cwd);
     free(initial_cwd);
@@ -308,12 +326,13 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
     return 0;
 }
 
-inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
+dyn_arr fetch_pkgs(dyn_arr *p_errors,
                        int sync_pkg_count, const char **sync_pkg_list,
                        int ext_clone_dir_path_len, const char *ext_clone_dir_path) {
     dyn_arr fetched_pkgs = dyn_arr_init(sync_pkg_count, 0, sizeof (pkginfo_t), NULL);
     for (int i = 0; i < sync_pkg_count; i++) {
         const char* pkg_name = sync_pkg_list[i];
+        const int pkg_name_len = strlen(pkg_name);
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
         memcpy(pkg_dir_path, ext_clone_dir_path, ext_clone_dir_path_len);
@@ -338,7 +357,7 @@ inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
                 const char *suffix = ".git";
                 const int suffix_len = strlen(suffix);
 
-                char fullcmd[cmd_len + ext_aur_url_len + pkg_name_len + suffix_len + 1];
+                char fullcmd[cmd_len + ext_aur_pkg_url_len + pkg_name_len + suffix_len + 1];
                 memcpy(fullcmd,
                        cmd, cmd_len);
                 memcpy(fullcmd + cmd_len,
@@ -377,7 +396,7 @@ inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
                     err = true;
                     append_err(p_errors, pkg_name_len, pkg_name, "Git fetch error");
                 }
-                FILE *p = popen("git diff HEAD FETCH_HEAD");
+                FILE *p = popen("git diff HEAD FETCH_HEAD", "r");
                 char buf[1024];
                 while (fgets(buf, sizeof buf, p) != NULL) {
                     if (strlen(buf) != 0) {
@@ -409,8 +428,11 @@ inline dyn_arr fetch_pkgs(dyn_arr *p_errors,
 }
 
 // TODO: handle build error
-inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
-    dyn_arr built_pkgs = dyn_arr_init(fetched_pkgs.size, 0, sizeof pkginfo_t, NULL);
+inline dyn_arr build_pkgs(dyn_arr *p_errors,
+                          const dyn_arr fetched_pkgs,
+                          const int makepkg_opts_len, char *const makepkg_opts[]
+) {
+    dyn_arr built_pkgs = dyn_arr_init(fetched_pkgs.size, 0, sizeof (pkginfo_t), NULL);
     for (size_t i = 0; i < fetched_pkgs.size; i++) {
         const pkginfo_t pkginfo = ((pkginfo_t*)fetched_pkgs.data)[i];
         const char* pkg_name = pkginfo.pkg_name;
@@ -435,7 +457,7 @@ inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
         char buf[buf_size];
         int whole_buf_strlen = 0;
         int read_count;
-        while ((read_count=fread(buf, sizeof char, buf_size - 1, pipe)) != 0) {
+        while ((read_count=fread(buf, sizeof (char), buf_size - 1, pipe)) != 0) {
             buf[read_count] = '\0';
             size_t str_len = strlen(buf);
             whole_buf_strlen += str_len;
@@ -505,7 +527,7 @@ inline dyn_arr build_pkgs(dyn_arr *p_errors, dyn_arr fetched_pkgs) {
     return built_pkgs;
 }
 
-inline void install_pkgs() {
+inline void install_pkgs(dyn_arr *p_errors, const dyn_arr built_pkgs) {
     printf(BOLD_GREEN "Installing..." RCN);
 
     char *sudo_args[4 + built_pkgs.size + 1];
@@ -514,8 +536,8 @@ inline void install_pkgs() {
     sudo_args[2] = "-U";
     sudo_args[3] = "--needed";
     for (size_t i = 0; i < built_pkgs.size; i++) {
-        char *built_pkg = ((char**)built_pkgs.data)[i];
-        sudo_args[4 + i] = built_pkg;
+        pkginfo_t pkginfo = ((pkginfo_t*)built_pkgs.data)[i];
+        sudo_args[4 + i] = pkginfo.built_pkg_path;
     }
     sudo_args[4 + built_pkgs.size] = NULL;
 
@@ -537,28 +559,8 @@ inline void install_pkgs() {
         if (WIFEXITED(status)) {
             if (WEXITSTATUS(status) != 0) {
                 printf(BOLD_RED "An error occurred while installing package!" RCN);
-                printf(BOLD_RED "Skipping %s" RCN, pkg_name);
-
-                char *pkg_name_cpy = malloc(pkg_name_len + 1);
-                memcpy(pkg_name_cpy, pkg_name, pkg_name_len + 1);
-
-                const char *err_msg = "Installation error";
-                const size_t err_msg_len = strlen(err_msg);
-                char *err_msg_cpy = malloc(err_msg_len + 1);
-                memcpy(err_msg_cpy, err_msg, err_msg_len + 1);
-
-                error_t err = {
-                    .pkg_name = pkg_name_cpy,
-                    .err_msg = err_msg_cpy,
-                };
-                dyn_arr_append(p_errors, 1, &err);
+                return;
             }
         }
     }
-
-    for (size_t i = 0; i < built_pkgs.size; i++) {
-        char *built_pkg = ((char**)built_pkgs.data)[i];
-        free(built_pkg);
-    }
-    dyn_arr_free(&built_pkgs);
 }
