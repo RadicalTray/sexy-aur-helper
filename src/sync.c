@@ -331,7 +331,6 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
         const char* pkg_name = sync_pkg_list[i];
         const int pkg_name_len = strlen(pkg_name);
 
-        // TODO: handle this err
         if (pkg_is_pkgbase_in_aur(pkg_name_len, pkg_name) != 0) {
             continue;
         }
