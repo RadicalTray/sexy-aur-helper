@@ -51,5 +51,5 @@ int run_upgrade(const int len, const char **args) {
 
 int upgrade_pkgs(int upgrade_pkg_count, const char *upgrade_pkg_list[]) {
     // TODO: check if needed to upgrade, deps etc
-    return sync_pkg(upgrade_pkg_count, upgrade_pkg_list, 0, NULL);
+    return sync_pkgs(upgrade_pkg_count, upgrade_pkg_list, 0, NULL);
 }

@@ -38,9 +38,15 @@ void setup() {
     const int stat_ret = stat(g_cache_dir, &s);
     if (stat_ret == -1) {
         if (errno == ENOENT) {
-            int mkdir_err = mkdir(g_cache_dir, S_IRWXU);
-            if (mkdir_err != 0) {
+            if (mkdir(g_cache_dir, S_IRWXU) != 0) {
                 perror("mkdir");
+                exit(EXIT_FAILURE);
+            }
+
+            if (system("git init") != 0) {
+                exit(EXIT_FAILURE);
+            }
+            if (system("git config --local init.defaultbranch master") != 0) {
                 exit(EXIT_FAILURE);
             }
         } else {
