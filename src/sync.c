@@ -11,17 +11,33 @@
 #include "utils.h"
 #include "utils_alpm.h"
 #include "globals.h"
+#include "macros.h"
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <sys/wait.h>
 
 
+#define CMD_CHECK_EXISTS(cmd) system("which " cmd " > /dev/null 2>&1") == 0
+#define CMD_READ_GIT_LSFILES(cmd) system("git ls-files | xargs --no-run-if-empty " cmd)
+
+dyn_arr fetch_pkgs(dyn_arr *p_errors,
+                       int sync_pkg_count, const char **sync_pkg_list,
+                       int ext_clone_dir_path_len, const char *ext_clone_dir_path);
+
+int build_pkgs(dyn_arr *p_errors,
+                      dyn_arr *pkginfos,
+                      const int makepkg_opts_len, char *const makepkg_opts[]);
+
+inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos);
+
+inline int exec_makepkg(char *const makepkg_args[]);
+
+
 typedef struct {
     char *pkg_name;
     char *err_msg;
 } error_t;
-
 
 typedef enum {
     NO_CHANGES,
@@ -38,56 +54,6 @@ typedef struct {
     e_diff_type diff;
 } pkginfo_t;
 
-
-#define EXECVP(file, args, ...) do {\
-    pid_t pid;\
-    if ((pid=fork()) == 0) {\
-        execvp(file, args);\
-        perror("execvp");\
-        exit(EXIT_FAILURE);\
-    } else if (pid < 0) {\
-        perror("fork");\
-    } else {\
-        int ret = waitpid(pid, NULL, 0);\
-        if (ret == -1) {\
-            perror("waitpid");\
-            exit(EXIT_FAILURE);\
-        }\
-    }} while (0)
-
-
-#define SAFE_MKDIR(path) do {\
-    struct stat s;\
-    const int stat_ret = stat(path, &s);\
-    if (stat_ret == -1) {\
-        if (errno == ENOENT) {\
-            if (mkdir(path, S_IRWXU) != 0) {\
-                perror("mkdir");\
-            }\
-        } else {\
-            perror("stat");\
-            exit(EXIT_FAILURE);\
-        }\
-    } else {\
-        if (!S_ISDIR(s.st_mode)) {\
-            fprintf(stderr, "%s already exists, but is not a directory!", g_cache_dir);\
-            exit(EXIT_FAILURE);\
-        }\
-    } } while (0)
-
-
-#define CMD_CHECK_EXISTS(cmd) system("which " cmd " > /dev/null 2>&1") == 0
-#define CMD_READ_GIT_LSFILES(cmd) system("git ls-files | xargs --no-run-if-empty " cmd)
-
-dyn_arr fetch_pkgs(dyn_arr *p_errors,
-                       int sync_pkg_count, const char **sync_pkg_list,
-                       int ext_clone_dir_path_len, const char *ext_clone_dir_path);
-
-inline int build_pkgs(dyn_arr *p_errors,
-                      dyn_arr *pkginfos,
-                      const int makepkg_opts_len, char *const makepkg_opts[]);
-
-inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos);
 
 void append_err(dyn_arr *p_errors, const int pkg_name_len, const char* pkg_name, const char *err_msg) {
     char *pkg_name_cpy = malloc(pkg_name_len + 1);
@@ -438,6 +404,8 @@ inline int build_pkgs(dyn_arr *p_errors,
     int total_pkg_count = 0;
     for (size_t i = 0; i < p_pkginfos->size; i++) {
         pkginfo_t *p_pkginfo = &(((pkginfo_t*)p_pkginfos->data)[i]);
+        const int pkg_name_len = p_pkginfo->pkg_name_len;
+        const char* pkg_name = p_pkginfo->pkg_name;
         const char* pkg_dir_path = p_pkginfo->pkg_dir_path;
         chdir(pkg_dir_path);
         system("git reset --hard origin");
@@ -448,7 +416,16 @@ inline int build_pkgs(dyn_arr *p_errors,
         makepkg_args[makepkg_opts_len + 1] = NULL;
 
         printf(BOLD_GREEN "Running makepkg..." RCN);
-        EXECVP("makepkg", makepkg_args);
+        int ret = exec_makepkg(makepkg_args);
+        if (ret == -1) {
+            append_err(p_errors, pkg_name_len, pkg_name, "Makepkg execution error (not makepkg itself)");
+            continue;
+        } else if (ret != 0 && ret != 13) {
+            char err_msg[128];
+            sprintf(err_msg,  "Makepkg error (%i)", ret);
+            append_err(p_errors, pkg_name_len, pkg_name, err_msg);
+            continue;
+        }
 
         FILE *pipe = popen("makepkg --packagelist", "r");
 
@@ -514,6 +491,30 @@ inline int build_pkgs(dyn_arr *p_errors,
         }
     }
     return total_pkg_count;
+}
+
+inline int exec_makepkg(char *const makepkg_args[]) {
+    pid_t pid;
+    if ((pid=fork()) == 0) {
+        execvp("makepkg", makepkg_args);
+        perror("execvp");
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+        perror("fork");
+    } else {
+        int status;
+        int ret = waitpid(pid, &status, 0);
+        if (ret == -1) {
+            perror("waitpid");
+            exit(EXIT_FAILURE);
+        }
+
+        if (WIFEXITED(status)) {
+            return WEXITSTATUS(status);
+        }
+    }
+
+    return -1;
 }
 
 inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos) {

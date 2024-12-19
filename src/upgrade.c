@@ -4,6 +4,8 @@
 #include "sync.h"
 #include "types.h"
 #include "utils.h"
+#include "macros.h"
+#include <sys/wait.h>
 #include <alpm.h>
 #include <string.h>
 
@@ -51,5 +53,7 @@ int run_upgrade(const int len, const char **args) {
 
 int upgrade_pkgs(int upgrade_pkg_count, const char *upgrade_pkg_list[]) {
     // TODO: check if needed to upgrade, deps etc
+    char *sudo_args[] = {"sudo", "pacman", "-Syu", NULL};
+    EXECVP("sudo", sudo_args);
     return sync_pkgs(upgrade_pkg_count, upgrade_pkg_list, 0, NULL);
 }
