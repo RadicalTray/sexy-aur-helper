@@ -12,7 +12,14 @@ int exec_sh_cmd(const char *cmd) {
 }
 
 void print_help(FILE *fptr) {
-    fprintf(fptr, "HELP\n");
+    fprintf(fptr, "Search the AUR package list:\n");
+    fprintf(fptr, "\tsaur search <search string>\n");
+    fprintf(fptr, "Sync a package:\n");
+    fprintf(fptr, "\tsaur sync <package name> [package name] ....\n");
+    fprintf(fptr, "Upgrade system and AUR packages:\n");
+    fprintf(fptr, "\tsaur upgrade\n");
+    fprintf(fptr, "Update the AUR package list:\n");
+    fprintf(fptr, "\tsaur update\n");
 }
 
 int set_globals() {
