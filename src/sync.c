@@ -21,13 +21,15 @@
 #define CMD_CHECK_EXISTS(cmd) system("which " cmd " > /dev/null 2>&1") == 0
 #define CMD_READ_GIT_LSFILES(cmd) system("git ls-files | xargs --no-run-if-empty " cmd)
 
-dyn_arr fetch_pkgs(dyn_arr *p_errors,
-                       int sync_pkg_count, const char **sync_pkg_list,
-                       int ext_clone_dir_path_len, const char *ext_clone_dir_path);
+dyn_arr fetch_pkgs(dyn_arr *p_errors, int *pkg_found, int *pkgbase_found,
+                   int sync_pkg_count, const char **sync_pkg_list,
+                   int ext_clone_dir_path_len, const char *ext_clone_dir_path);
 
-int build_pkgs(dyn_arr *p_errors,
-                      dyn_arr *pkginfos,
-                      const int makepkg_opts_len, char *const makepkg_opts[]);
+void build_pkgs(dyn_arr *p_errors,
+               int *pkgbase_built, int *pkgbase_newly_built,
+               int *pkg_built, int *pkg_newly_built,
+               dyn_arr *p_pkginfos,
+               const int makepkg_opts_len, char *const makepkg_opts[]);
 
 void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos);
 
@@ -197,7 +199,8 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
 
     dyn_arr errors = dyn_arr_init(0, 0, sizeof (error_t), NULL);
 
-    dyn_arr pkginfos = fetch_pkgs(&errors,
+    int pkg_found = 0, pkgbase_found = 0;
+    dyn_arr pkginfos = fetch_pkgs(&errors, &pkg_found, &pkgbase_found,
                                   sync_pkg_count, sync_pkg_list,
                                   ext_clone_dir_path_len, ext_clone_dir_path);
 
@@ -258,9 +261,14 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
         }
     }
 
-    int total_pkg_count = build_pkgs(&errors, &pkginfos, makepkg_opts_len, makepkg_opts);
+    int pkgbase_built = 0, pkgbase_newly_built = 0;
+    int pkg_built = 0, pkg_newly_built = 0;
+    build_pkgs(&errors,
+               &pkgbase_built, &pkgbase_newly_built,
+               &pkg_built, &pkg_newly_built,
+               &pkginfos, makepkg_opts_len, makepkg_opts);
 
-    install_pkgs(&errors, total_pkg_count, pkginfos);
+    install_pkgs(&errors, pkg_built, pkginfos);
     for (size_t i = 0; i < pkginfos.size; i++) {
         pkginfo_t pkginfo = ((pkginfo_t*)pkginfos.data)[i];
         free(pkginfo.pkg_name);
@@ -275,8 +283,15 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
     chdir(initial_cwd);
     free(initial_cwd);
 
+    printf("pkgbase found: %i\n", pkgbase_found);
+    printf("\tpkgbase built: %i\n", pkgbase_built);
+    printf("\tpkgbase newly built: %i\n", pkgbase_newly_built);
+    printf("pkg found: %i\n", pkg_found);
+    printf("\tpkg built: %i\n", pkg_built);
+    printf("\tpkg newly built: %i\n", pkg_newly_built);
+
     if (errors.size > 0) {
-        printf(BOLD_RED "Errors found!" RCN);
+        printf(BOLD_RED "errors found:" RC " %li\n", errors.size);
         for (size_t i = 0; i < errors.size; i++) {
             error_t err = ((error_t*)errors.data)[i];
             char *pkg_name = err.pkg_name, *err_msg = err.err_msg;
@@ -291,17 +306,23 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
     return 0;
 }
 
-dyn_arr fetch_pkgs(dyn_arr *p_errors,
-                       int sync_pkg_count, const char **sync_pkg_list,
-                       int ext_clone_dir_path_len, const char *ext_clone_dir_path) {
+// gives only pkgbase
+dyn_arr fetch_pkgs(dyn_arr *p_errors, int *pkg_found, int *pkgbase_found,
+                   int sync_pkg_count, const char **sync_pkg_list,
+                   int ext_clone_dir_path_len, const char *ext_clone_dir_path
+) {
     dyn_arr pkginfos = dyn_arr_init(sync_pkg_count, 0, sizeof (pkginfo_t), NULL);
     for (int i = 0; i < sync_pkg_count; i++) {
         const char* pkg_name = sync_pkg_list[i];
         const int pkg_name_len = strlen(pkg_name);
 
+        (*pkg_found)++;
+
         if (pkg_is_pkgbase_in_aur(pkg_name_len, pkg_name) != 0) {
             continue;
         }
+
+        (*pkgbase_found)++;
 
         const int pkg_dir_path_len = ext_clone_dir_path_len + pkg_name_len;
         char pkg_dir_path[pkg_dir_path_len + 1];
@@ -402,11 +423,12 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
     return pkginfos;
 }
 
-int build_pkgs(dyn_arr *p_errors,
-                      dyn_arr *p_pkginfos,
-                      const int makepkg_opts_len, char *const makepkg_opts[]
+void build_pkgs(dyn_arr *p_errors,
+               int *pkgbase_built, int *pkgbase_newly_built,
+               int *pkg_built, int *pkg_newly_built,
+               dyn_arr *p_pkginfos,
+               const int makepkg_opts_len, char *const makepkg_opts[]
 ) {
-    int total_pkg_count = 0;
     for (size_t i = 0; i < p_pkginfos->size; i++) {
         pkginfo_t *p_pkginfo = &(((pkginfo_t*)p_pkginfos->data)[i]);
         const int pkg_name_len = p_pkginfo->pkg_name_len;
@@ -423,17 +445,25 @@ int build_pkgs(dyn_arr *p_errors,
         memcpy(makepkg_args + 1, makepkg_opts, makepkg_opts_len * sizeof (char*));
         makepkg_args[makepkg_opts_len + 1] = NULL;
 
+        int newly_built = -1;
         printf(BOLD_GREEN "Running makepkg..." RCN);
         int ret = exec_makepkg(makepkg_args);
         if (ret == -1) {
             append_err(p_errors, pkg_name_len, pkg_name, "Makepkg execution error (not makepkg itself)");
             continue;
-        } else if (ret != 0 && ret != 13) {
+        } else if (ret == 13) {
+            newly_built = 0;
+        } else if (ret == 0) {
+            newly_built = 1;
+            (*pkgbase_newly_built)++;
+        } else {
             char err_msg[128];
             sprintf(err_msg,  "Makepkg error (%i)", ret);
             append_err(p_errors, pkg_name_len, pkg_name, err_msg);
             continue;
         }
+
+        (*pkgbase_built)++;
 
         FILE *pipe = popen("makepkg --packagelist", "r");
 
@@ -456,7 +486,6 @@ int build_pkgs(dyn_arr *p_errors,
 
             dyn_arr_append(&dyn_buf, 1, &str);
         }
-        // BUG: HANDLE FREAD ERROR
 
         pclose(pipe);
 
@@ -494,11 +523,15 @@ int build_pkgs(dyn_arr *p_errors,
             built_pkg_path[built_pkg_path_len] = '\0';
 
             dyn_arr_append(&(p_pkginfo->built_pkg_paths), 1, &built_pkg_path);
-            total_pkg_count++;
+
+            if (newly_built == 1) {
+                (*pkg_newly_built)++;
+            }
+            (*pkg_built)++;
+
             i += char_read;
         }
     }
-    return total_pkg_count;
 }
 
 int exec_makepkg(char *const makepkg_args[]) {
