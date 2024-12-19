@@ -29,9 +29,9 @@ int build_pkgs(dyn_arr *p_errors,
                       dyn_arr *pkginfos,
                       const int makepkg_opts_len, char *const makepkg_opts[]);
 
-inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos);
+void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos);
 
-inline int exec_makepkg(char *const makepkg_args[]);
+int exec_makepkg(char *const makepkg_args[]);
 
 
 typedef struct {
@@ -396,8 +396,7 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
     return pkginfos;
 }
 
-// TODO: handle build error
-inline int build_pkgs(dyn_arr *p_errors,
+int build_pkgs(dyn_arr *p_errors,
                       dyn_arr *p_pkginfos,
                       const int makepkg_opts_len, char *const makepkg_opts[]
 ) {
@@ -493,7 +492,7 @@ inline int build_pkgs(dyn_arr *p_errors,
     return total_pkg_count;
 }
 
-inline int exec_makepkg(char *const makepkg_args[]) {
+int exec_makepkg(char *const makepkg_args[]) {
     pid_t pid;
     if ((pid=fork()) == 0) {
         execvp("makepkg", makepkg_args);
@@ -517,7 +516,7 @@ inline int exec_makepkg(char *const makepkg_args[]) {
     return -1;
 }
 
-inline void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos) {
+void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos) {
     printf(BOLD_GREEN "Installing..." RCN);
 
     char *sudo_args[4 + total_pkg_count + 1];
