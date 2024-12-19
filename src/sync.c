@@ -574,7 +574,7 @@ void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pk
             idx++;
         }
     }
-    sudo_args[4 + pkginfos.size] = NULL;
+    sudo_args[4 + total_pkg_count] = NULL;
 
     pid_t pid;
     if ((pid=fork()) == 0) {
