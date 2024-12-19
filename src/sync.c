@@ -249,8 +249,10 @@ int sync_pkgs(const int sync_pkg_count, const char **sync_pkg_list, const int ma
             exit(69);
         }
 
-        if (accept == 1) {
+        if (accept == 0) {
             return 0;
+        } else if (accept == 1) {
+            continue;
         } else if (accept == 2) {
             break;
         }
@@ -307,7 +309,6 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
         memcpy(pkg_dir_path + ext_clone_dir_path_len, pkg_name, pkg_name_len + 1);
 
         e_diff_type diff = NO_CHANGES;
-        bool err = false;
         struct stat s;
         const int ret = stat(pkg_dir_path, &s);
         if (ret == -1) {
@@ -337,33 +338,40 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
 
                 int ret = system(fullcmd);
                 if (ret != 0) {
+                    if (ret == 130) {
+                        exit(130);
+                    }
                     printf(BOLD_RED "An error occurred while cloning %s repo!" RCN, pkg_name);
-                    err = true;
                     append_err(p_errors, pkg_name_len, pkg_name, "Git clone error");
+                    continue;
                 }
             } else {
                 perror("stat");
 
-                err = true;
                 append_err(p_errors, pkg_name_len, pkg_name, "stat() error");
+                continue;
             }
         } else {
             if (!S_ISDIR(s.st_mode)) {
                 fprintf(stderr, "%s already exists, but is not a directory!", pkg_dir_path);
 
-                err = true;
                 append_err(p_errors, pkg_name_len, pkg_name, "Package path is not a directory");
+                continue;
             } else {
                 chdir(pkg_dir_path);
 
-                printf(BOLD_GREEN "Fetching..." RCN);
+                printf(BOLD_GREEN "Fetching..." RC " %s\n", pkg_name);
                 int ret = system("git fetch");
                 if (ret != 0) {
+                    if (ret == 130) {
+                        exit(130);
+                    }
                     printf(BOLD_RED "An error occurred while fetching repo!" RCN);
 
-                    err = true;
                     append_err(p_errors, pkg_name_len, pkg_name, "Git fetch error");
+                    continue;
                 }
+                // NOTE: I have a feeling something can go wrong here
                 FILE *p = popen("git diff HEAD FETCH_HEAD", "r");
                 char buf[1024];
                 while (fgets(buf, sizeof buf, p) != NULL) {
@@ -375,23 +383,21 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors,
             }
         }
 
-        if (!err) {
-            char *pkg_name_cpy = malloc(pkg_name_len + 1);
-            strcpy(pkg_name_cpy, pkg_name);
+        char *pkg_name_cpy = malloc(pkg_name_len + 1);
+        strcpy(pkg_name_cpy, pkg_name);
 
-            char *pkg_dir_path_cpy = malloc(pkg_dir_path_len + 1);
-            strcpy(pkg_dir_path_cpy, pkg_dir_path);
+        char *pkg_dir_path_cpy = malloc(pkg_dir_path_len + 1);
+        strcpy(pkg_dir_path_cpy, pkg_dir_path);
 
-            pkginfo_t pkginfo = {
-                .pkg_name = pkg_name_cpy,
-                .pkg_name_len = pkg_name_len,
-                .pkg_dir_path = pkg_dir_path_cpy,
-                .pkg_dir_path_len = pkg_dir_path_len,
-                .built_pkg_paths = dyn_arr_init(1, 0, sizeof (char*), NULL),
-                .diff = diff,
-            };
-            dyn_arr_append(&pkginfos, 1, &pkginfo);
-        }
+        pkginfo_t pkginfo = {
+            .pkg_name = pkg_name_cpy,
+            .pkg_name_len = pkg_name_len,
+            .pkg_dir_path = pkg_dir_path_cpy,
+            .pkg_dir_path_len = pkg_dir_path_len,
+            .built_pkg_paths = dyn_arr_init(1, 0, sizeof (char*), NULL),
+            .diff = diff,
+        };
+        dyn_arr_append(&pkginfos, 1, &pkginfo);
     }
     return pkginfos;
 }
@@ -406,6 +412,9 @@ int build_pkgs(dyn_arr *p_errors,
         const int pkg_name_len = p_pkginfo->pkg_name_len;
         const char* pkg_name = p_pkginfo->pkg_name;
         const char* pkg_dir_path = p_pkginfo->pkg_dir_path;
+
+        printf(BOLD_GREEN "Building..." RC " %s\n", pkg_name);
+
         chdir(pkg_dir_path);
         system("git reset --hard origin");
 
