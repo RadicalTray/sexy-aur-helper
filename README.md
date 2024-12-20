@@ -16,7 +16,7 @@ Upgrade system and AUR packages:
 
 Update the AUR package list:
 
-    `saur update`
+    `saur update-pkg-list`
 
 ## Build
 

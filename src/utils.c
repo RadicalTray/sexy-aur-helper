@@ -19,7 +19,7 @@ void print_help(FILE *fptr) {
     fprintf(fptr, "Upgrade system and AUR packages:\n");
     fprintf(fptr, "\tsaur upgrade\n");
     fprintf(fptr, "Update the AUR package list:\n");
-    fprintf(fptr, "\tsaur update\n");
+    fprintf(fptr, "\tsaur update-pkg-list\n");
 }
 
 int set_globals() {
