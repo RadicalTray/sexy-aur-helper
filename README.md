@@ -2,14 +2,23 @@
 
 ## Usage
 
-TODO
+Search the AUR package list
 
-## Installation / Build
-### Dependencies
+    `saur search <search string>`
 
-TODO
+Sync a package or multiple packages:
 
-### Build steps
+    `saur sync <package name> [package name] ....`
+
+Upgrade system and AUR packages:
+
+    `saur upgrade`
+
+Update the AUR package list:
+
+    `saur update`
+
+## Build
 
 ```
 make
