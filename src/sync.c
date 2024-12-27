@@ -359,10 +359,10 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors, int *pkg_found, int *pkgbase_found,
 
                 int ret = system(fullcmd);
                 if (ret != 0) {
-                    if (ret == 130) {
-                        exit(130);
+                    printf(BOLD_RED "An error occurred while cloning repo! (%i)" RCN, ret);
+                    if (ret == 2) {
+                        exit(2);
                     }
-                    printf(BOLD_RED "An error occurred while cloning %s repo!" RCN, pkg_name);
                     append_err(p_errors, pkg_name_len, pkg_name, "Git clone error");
                     continue;
                 }
@@ -384,10 +384,10 @@ dyn_arr fetch_pkgs(dyn_arr *p_errors, int *pkg_found, int *pkgbase_found,
                 printf(BOLD_GREEN "Fetching..." RC " %s\n", pkg_name);
                 int ret = system("git fetch");
                 if (ret != 0) {
-                    if (ret == 130) {
-                        exit(130);
+                    printf(BOLD_RED "An error occurred while fetching repo! (%i)" RCN, ret);
+                    if (ret == 2) {
+                        exit(2);
                     }
-                    printf(BOLD_RED "An error occurred while fetching repo!" RCN);
 
                     append_err(p_errors, pkg_name_len, pkg_name, "Git fetch error");
                     continue;
@@ -559,6 +559,10 @@ int exec_makepkg(char *const makepkg_args[]) {
 }
 
 void install_pkgs(dyn_arr *p_errors, const int total_pkg_count, const dyn_arr pkginfos) {
+    if (total_pkg_count <= 0) {
+        return;
+    }
+
     printf(BOLD_GREEN "Installing..." RCN);
 
     char *sudo_args[4 + total_pkg_count + 1];
