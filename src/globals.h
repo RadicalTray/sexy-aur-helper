@@ -7,8 +7,8 @@
 #define RC "\033[0m"
 #define RCN "\033[0m\n"
 
-#define PKG_LIST_FILENAME "packages.txt"
-#define PKGBASE_LIST_FILENAME "pkgbase.txt"
+#define PKG_LIST_FILENAME "packages"
+#define PKGBASE_LIST_FILENAME "pkgbase"
 #define XDG_CACHE_HOME "XDG_CACHE_HOME"
 #define PROGRAM_NAME "saur"
 #define EXT_AUR_PKG_URL "https://aur.archlinux.org/"
